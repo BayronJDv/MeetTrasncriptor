@@ -1,0 +1,15 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node / build
+web/node_modules/
+web/dist/
+
+# Datos generados (audios, transcripciones)
+data/projects/
+data/bin/
+
+#hf token etc no va aparte, queda en data/config.json local
+data/config.json

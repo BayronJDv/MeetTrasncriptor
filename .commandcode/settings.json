@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Shell(curl -s http://localhost:8000/api/jobs)",
+      "Shell(python -c \"import json; c=json.load(open(r'data\\config.json')); print(c['llm']['provider'], '|', c['llm']['model'], '| key set:', bool(c['llm'].get('api_key')))\" 2>nul || powershell -Command \"$c = Get-Content data\\config.json | ConvertFrom-Json; Write-Output ($c.llm.provider + ' | ' + $c.llm.model + ' | key set: ' + [bool]$c.llm.api_key)\")",
+      "powershell"
+    ],
+    "deny": [],
+    "defaultMode": "default"
+  }
+}
