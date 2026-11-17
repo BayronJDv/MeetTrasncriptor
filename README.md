@@ -23,20 +23,25 @@ revisión de texto y redacción del informe (Groq u otro proveedor configurable)
 
 ## Instalación
 
-Requisitos (una sola vez):
+Requisitos (una sola vez): **Python 3.10+** (recomendado 3.12) y **Node.js LTS** (solo para
+compilar la interfaz la primera vez).
 
-- **Python 3.12** → `winget install Python.Python.3.12`
-- **Node.js** (para compilar la interfaz una vez) → `winget install OpenJS.NodeJS.LTS`
-- **Visual C++ Redistributable** (requisito de PyTorch en Windows) →
-  `winget install Microsoft.VCRedist.2015+.x64`
+| Sistema | Instalar requisitos | Arrancar |
+|---|---|---|
+| Windows | `winget install Python.Python.3.12` · `winget install OpenJS.NodeJS.LTS` · `winget install Microsoft.VCRedist.2015+.x64` | doble clic en **`run.bat`** |
+| Linux (Debian/Ubuntu) | `sudo apt install python3.12 python3.12-venv nodejs npm` | `./run.sh` |
+| macOS | `brew install python@3.12 node` | `./run.sh` |
 
-Después, simplemente ejecuta **`run.bat`**: crea el entorno virtual, instala dependencias,
-compila la interfaz y abre `http://localhost:8000`.
+Ambos scripts usan el mismo lanzador (`run.py`): crea el entorno virtual, instala dependencias,
+compila la interfaz si hace falta y abre `http://localhost:8000`. No hace falta instalar ffmpeg
+a mano: si no está en el PATH se usa el binario de `imageio-ffmpeg`.
 
-> El entorno virtual de Python se crea en `%LOCALAPPDATA%\transcriptor\venv312` (fuera de
-> OneDrive) para no sincronizar gigas de librerías. Los audios y resultados sí quedan en
-> `data/` dentro del proyecto: si no quieres que OneDrive los suba, marca esa carpeta como
-> excluida en Ajustes de OneDrive.
+> En Windows el venv se crea en `%LOCALAPPDATA%\transcriptor\venv312` (fuera de OneDrive) y en
+> Linux/macOS en `./.venv` (ya ignorado por Git). Puedes cambiarlo con
+> `TRANSCRIPTOR_VENV=/ruta/al/venv`. Los audios y resultados quedan en `data/` dentro del
+> proyecto: si usas OneDrive, marca esa carpeta como excluida.
+
+Opciones del lanzador: `./run.sh --host 127.0.0.1 --port 8000 --no-browser` (igual en `run.bat`).
 
 ### Token de HuggingFace (necesario para la diarización)
 
@@ -70,7 +75,8 @@ Consejos:
 ## Estructura del proyecto
 
 ```
-run.bat                  # arranca todo
+run.py                   # lanzador multiplataforma
+run.bat / run.sh         # arranque en Windows / Linux y macOS
 requirements.txt         # dependencias Python
 app/                     # backend FastAPI (API + jobs + servicios)
 web/                     # frontend React (compilado a web/dist)
@@ -80,10 +86,11 @@ templates/               # tus plantillas de informe
 
 ## Desarrollo
 
-```bat
-:: backend con recarga
-%LOCALAPPDATA%\transcriptor\venv312\Scripts\python -m uvicorn app.main:app --reload
+```sh
+# backend con recarga
+.venv/bin/python -m uvicorn app.main:app --reload          # Linux/macOS
+%LOCALAPPDATA%\transcriptor\venv312\Scripts\python -m uvicorn app.main:app --reload   # Windows
 
-:: frontend con recarga (proxy a :8000)
+# frontend con recarga (proxy a :8000)
 cd web && npm run dev
 ```

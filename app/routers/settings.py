@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
+import sys
+from pathlib import Path
 
 from fastapi import APIRouter
 
@@ -10,6 +13,48 @@ from ..schemas import SettingsPatch
 from ..services.llm.client import PROVIDERS
 
 router = APIRouter(prefix="/api", tags=["settings"])
+
+
+def _ram_gb() -> float | None:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            class _MemoryStatus(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            stat = _MemoryStatus()
+            stat.dwLength = ctypes.sizeof(_MemoryStatus)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                return round(stat.ullTotalPhys / 1024**3, 1)
+        except (AttributeError, OSError, ValueError):
+            return None
+    if sys.platform.startswith("linux"):
+        try:
+            for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+                if line.startswith("MemTotal:"):
+                    return round(int(line.split()[1]) / 1024**2, 1)
+        except (OSError, ValueError, IndexError):
+            return None
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, check=True
+            )
+            return round(int(result.stdout.strip()) / 1024**3, 1)
+        except (OSError, subprocess.CalledProcessError, ValueError):
+            return None
+    return None
 
 
 @router.get("/settings")
@@ -54,28 +99,7 @@ def system_info() -> dict:
         info["torch"] = f"no disponible ({exc})"
         info["cuda_available"] = False
 
-    try:
-        import ctypes
-
-        class _MemoryStatus(ctypes.Structure):
-            _fields_ = [
-                ("dwLength", ctypes.c_ulong),
-                ("dwMemoryLoad", ctypes.c_ulong),
-                ("ullTotalPhys", ctypes.c_ulonglong),
-                ("ullAvailPhys", ctypes.c_ulonglong),
-                ("ullTotalPageFile", ctypes.c_ulonglong),
-                ("ullAvailPageFile", ctypes.c_ulonglong),
-                ("ullTotalVirtual", ctypes.c_ulonglong),
-                ("ullAvailVirtual", ctypes.c_ulonglong),
-                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-            ]
-
-        stat = _MemoryStatus()
-        stat.dwLength = ctypes.sizeof(_MemoryStatus)
-        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
-            info["ram_gb"] = round(stat.ullTotalPhys / 1024**3, 1)
-    except (AttributeError, OSError, ValueError):
-        info["ram_gb"] = None
+    info["ram_gb"] = _ram_gb()
 
     # recomendación según hardware (MX150 2GB / 16GB RAM → ASR en CPU int8)
     rec_asr_device = "cpu"
