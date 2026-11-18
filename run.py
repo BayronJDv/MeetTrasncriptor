@@ -125,11 +125,32 @@ def main() -> int:
     parser.add_argument("--host", help="dirección de escucha (por defecto, la de data/config.json)")
     parser.add_argument("--port", type=int, help="puerto (por defecto, el de data/config.json)")
     parser.add_argument("--no-browser", action="store_true", help="no abrir el navegador")
+    parser.add_argument("--install", choices=("whisperx", "pyannote", "parakeet_gguf", "nemotron_gguf", "none"))
     args = parser.parse_args()
 
+    if args.install in {"parakeet_gguf", "nemotron_gguf", "none"}:
+        raise SystemExit(f"{args.install} no se instala desde la app; consulta la instalación manual del catálogo.")
     directory = venv_dir()
     pyexe = ensure_venv(directory)
-    ensure_dependencies(pyexe, directory)
+    if args.install:
+        if args.install == "pyannote":
+            try:
+                stored_config = json.loads(CONFIG_PATH.read_text(encoding="utf-8-sig"))
+            except (OSError, json.JSONDecodeError):
+                stored_config = {}
+            diar = stored_config.get("diar", {})
+            options = diar.get("options", {}).get("pyannote", {})
+            if not (options.get("hf_token") or diar.get("hf_token")):
+                raise SystemExit("Configura un token HF antes de instalar pyannote.")
+            confirmation = input("Escribe 'Acepto los términos' para continuar: ")
+            if confirmation != "Acepto los términos":
+                raise SystemExit("No se aceptaron los términos; no se instaló pyannote.")
+            from app.config import save_config
+
+            save_config({"diar": {"options": {"pyannote": {"terms_accepted": True}}}})
+        extra = {"whisperx": "asr-whisperx", "pyannote": "diar-pyannote"}[args.install]
+        run([pyexe, "-m", "pip", "install", f".[{extra}]"])
+        return 0
     ensure_frontend()
 
     host, port = server_config()

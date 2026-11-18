@@ -10,12 +10,11 @@
 - P2-4: config/schema v3 con engine/options, migración v1/v2 y mirrors legacy para la UI actual; `hf_token` se conserva y enmascara en `options.pyannote`.
 - Registro perezoso de adaptadores; el router llama al orquestador y `diar.engine=none` omite diarización.
 - Tests de migración, defaults, secretos, validación de options y transcript sin hablantes escritos; pendientes de ejecución por el usuario.
-- P2-5: adaptador opcional `parakeet_gguf` con NeMo-Speech.cpp, JSON de palabras, ruta GGUF local obligatoria, subprocess cancelable y chunking compartido; WhisperX sigue default.
-- Tests simulados e integración `@pytest.mark.integration` escritos en `tests/test_parakeet_gguf.py`; requieren ejecución del usuario. Integración real usa `NEMO_SPEECH_BINARY` y `PARAKEET_GGUF_MODEL`.
-- NeMo-Speech.cpp 0.3.0 instalado localmente (CUDA) y Parakeet TDT v3 GGUF descargado/verificado (681 MiB) en `~/.cache/nemo-speech/models`; pytest 9.2.0 añadido solo a `.venv`.
-- `nemo-speech doctor`: CUDA/RTX 4070 disponible; CLI y GGUF listos para probar manualmente; pytest no ejecutado por regla del repo.
-- Integración manual: `NEMO_SPEECH_BINARY="$HOME/.local/bin/nemo-speech" PARAKEET_GGUF_MODEL="$HOME/.cache/nemo-speech/models/nvidia/parakeet-tdt-0.6b-v3/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/parakeet-tdt-0.6b-v3.q8_0.gguf" .venv/bin/python -m pytest tests/test_parakeet_gguf.py::test_parakeet_real_binary_transcribes_synthetic_audio -q`.
-- P2-6: verificación oficial completada; `diarize --format json` devuelve `segments[{start,end,speaker}]`; GGUF final identificado como `nvidia/Nemotron-3-Diarization`, OpenMDW-1.1, descargable vía `nemo-speech pull`.
-- P2-6: adaptador opcional Nemotron GGUF registrado; valida nombre/rol/runtime del GGUF local para excluir Sortformer, no usa token HF y mantiene pyannote como default.
-- P2-6: avisos por más de 8 hablantes/expectativa en log, transcript y meta; tests simulados escritos, pendientes de ejecución. No se descargó el modelo.
-- `python3 -m py_compile` y `git diff --check` pasaron; suite completa pendiente de ejecución por el usuario.
+- P2-5: adaptador opcional Parakeet GGUF, ruta local, salida JSON y chunking; tests sintéticos/de integración escritos. Runtime y modelo se verificaron localmente; prueba manual documentada en `tests/test_parakeet_gguf.py`.
+- P2-6: adaptador Nemotron GGUF usa solo `nvidia/Nemotron-3-Diarization` (OpenMDW-1.1); tests simulados escritos, modelo no descargado.
+- Decisión P2-7: NeMo-Speech.cpp y modelos GGUF se instalan manualmente; no ejecutar scripts remotos ni instalar binarios desde API/CLI.
+- P2-7: catálogo, recomendaciones, detección sin torch, extras Python opcionales, consentimiento HF para ambos modelos pyannote y CLI `--install`; tests en `tests/test_catalog.py`, pendientes del usuario.
+- WhisperX 3.3.1 requiere `pyannote.audio==3.3.2`; `speaker-diarization-3.1` y `segmentation-3.0` declaran MIT. Sin cambios al motor default.
+- P2-7: `python3 -m pytest tests/test_catalog.py -q` confirmado por el usuario: 6 passed; 3 avisos deprecados de Starlette/httpx y FastAPI `on_event`.
+- `py_compile` y `git diff --check` pasaron; suite completa pendiente de ejecución por el usuario.
+- Pytest está instalado solo en `.venv` y no se ejecutó por regla del repo.

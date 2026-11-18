@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .jobs import manager
-from .routers import llm, meeting, projects, report, review, settings, speakers, transcribe
+from .routers import catalog, llm, meeting, projects, report, review, settings, speakers, transcribe
 
 BASE_DIR = config.BASE_DIR
 WEB_DIST = BASE_DIR / "web" / "dist"
@@ -33,6 +33,7 @@ for r in (
     meeting.router,
     report.router,
     settings.router,
+    catalog.router,
     llm.router,
 ):
     app.include_router(r)
@@ -43,13 +44,6 @@ async def startup() -> None:
     config.ensure_dirs()
     loop = asyncio.get_running_loop()
     manager.start(loop)
-    # prepara el binario de ffmpeg en PATH para whisperx
-    try:
-        from .ffmpeg_utils import get_ffmpeg
-
-        get_ffmpeg()
-    except Exception as exc:  # noqa: BLE001
-        print(f"Aviso: ffmpeg no disponible aún ({exc})")
 
 
 @app.get("/api/health")

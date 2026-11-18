@@ -57,6 +57,40 @@ def _ram_gb() -> float | None:
     return None
 
 
+def _ram_available_gb() -> float | None:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            class _MemoryStatus(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            status = _MemoryStatus()
+            status.dwLength = ctypes.sizeof(_MemoryStatus)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+                return round(status.ullAvailPhys / 1024**3, 1)
+        except (AttributeError, OSError, ValueError):
+            return None
+    if sys.platform.startswith("linux"):
+        try:
+            for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+                if line.startswith("MemAvailable:"):
+                    return round(int(line.split()[1]) / 1024**2, 1)
+        except (OSError, ValueError, IndexError):
+            return None
+    return None
+
+
 def _mask_secrets(cfg: dict) -> dict:
     cfg = dict(cfg)
     cfg["llm"] = dict(cfg.get("llm", {}))
@@ -151,46 +185,93 @@ def put_settings(patch: SettingsPatch) -> dict:
     return {"config": _mask_secrets(cfg)}
 
 
+def _gpu_info() -> dict:
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=3,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return {"available": False, "name": None, "vram_gb": None}
+    first_gpu = result.stdout.splitlines()[0].split(",", 1) if result.stdout.strip() else []
+    if len(first_gpu) != 2:
+        return {"available": False, "name": None, "vram_gb": None}
+    try:
+        memory = round(float(first_gpu[1].strip()) / 1024, 1)
+    except ValueError:
+        return {"available": False, "name": None, "vram_gb": None}
+    return {"available": True, "name": first_gpu[0].strip(), "vram_gb": memory}
+
+
+def recommendations(hardware: dict, installed: set[str]) -> list[dict]:
+    profiles = [
+        {
+            "profile": "cpu_low_memory",
+            "applies": (hardware.get("ram_available_gb") is not None and hardware["ram_available_gb"] <= 2) or not hardware.get("gpu"),
+            "engines": ["parakeet_gguf", "nemotron_gguf"],
+            "alternative": {"engine": "whisperx", "model": "small", "compute_type": "int8", "reason": "99 idiomas"},
+        },
+        {
+            "profile": "nvidia_gpu",
+            "applies": bool(hardware.get("gpu") and hardware.get("vram_gb", 0) >= 6),
+            "engines": [engine for engine in ("whisperx", "parakeet_gguf") if engine in installed],
+            "available_engines": ["whisperx", "parakeet_gguf"],
+        },
+        {
+            "profile": "pyannote",
+            "applies": True,
+            "engine": "pyannote",
+            "requires": ["hf_token", "hf_terms"],
+            "terms_urls": [
+                "https://huggingface.co/pyannote/speaker-diarization-3.1",
+                "https://huggingface.co/pyannote/segmentation-3.0",
+            ],
+            "confirmation": "Acepto los términos",
+        },
+    ]
+    return profiles
+
+
 @router.get("/system")
 def system_info() -> dict:
     import platform
 
-    info: dict = {
+    gpu = _gpu_info()
+    info = {
         "python": platform.python_version(),
         "platform": platform.platform(),
+        "os": platform.system(),
         "cpu": platform.processor() or "desconocido",
+        "ram_gb": _ram_gb(),
+        "ram_available_gb": _ram_available_gb(),
+        "vram_gb": gpu["vram_gb"],
+        "gpu_vram_gb": gpu["vram_gb"],
+        "gpu": gpu["name"],
+        "cuda_available": gpu["available"],
+        "torch": "instalación opcional; no detectada por el endpoint",
         "ffmpeg": bool(shutil.which("ffmpeg")) or "imageio-ffmpeg",
     }
-    try:
-        import torch
+    from ..services.catalog import get_catalog
 
-        info["torch"] = torch.__version__
-        info["cuda_available"] = torch.cuda.is_available()
-        if torch.cuda.is_available():
-            props = torch.cuda.get_device_properties(0)
-            info["gpu"] = props.name
-            info["gpu_vram_gb"] = round(props.total_memory / 1024**3, 1)
-    except Exception as exc:  # noqa: BLE001
-        info["torch"] = f"no disponible ({exc})"
-        info["cuda_available"] = False
-
-    info["ram_gb"] = _ram_gb()
-
-    # recomendación según hardware (MX150 2GB / 16GB RAM → ASR en CPU int8)
-    rec_asr_device = "cpu"
-    rec_compute = "int8"
-    rec_model = "small"
-    rec_diar = "cuda" if info.get("cuda_available") else "cpu"
+    engines = get_catalog()
+    installed = {engine["id"] for engine in engines if engine["installed"]}
+    info["capabilities"] = {
+        "nvidia_gpu": gpu["available"],
+        "nemo_speech": shutil.which("nemo-speech") is not None,
+        "engines_installed": sorted(installed),
+    }
+    info["recommendations"] = recommendations(
+        {"ram_gb": info["ram_gb"], "gpu": gpu["available"], "vram_gb": info["vram_gb"]},
+        installed,
+    )
     info["recommendation"] = {
-        "asr_device": rec_asr_device,
-        "compute_type": rec_compute,
-        "model": rec_model,
-        "diar_device": rec_diar,
-        "note": (
-            "GPU detectada: la diarización puede usar CUDA. "
-            if info.get("cuda_available")
-            else "Sin torch-CUDA: la diarización usará CPU (más lenta en audios largos). "
-            "Para usar la GPU instala torch con CUDA."
-        ),
+        "asr_device": "cuda" if gpu["available"] else "cpu",
+        "compute_type": "float16" if gpu["available"] else "int8",
+        "model": "small",
+        "diar_device": "cuda" if gpu["available"] else "cpu",
+        "note": "Recomendaciones por motor disponibles en recommendations.",
     }
     return info
