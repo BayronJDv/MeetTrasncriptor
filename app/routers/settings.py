@@ -75,7 +75,7 @@ def get_settings() -> dict:
 def put_settings(patch: SettingsPatch) -> dict:
     previous = load_config()
     payload = {}
-    for section in ("asr", "diar", "llm", "prompts", "report"):
+    for section in ("asr", "diar", "llm", "prompts", "report", "advanced"):
         part = getattr(patch, section)
         if part is not None:
             payload[section] = part.model_dump(exclude_unset=True)

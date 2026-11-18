@@ -10,6 +10,7 @@ import json
 from ... import config
 from ...jobs import Job
 from ..llm.client import LlmClient, LlmError
+from . import prompts
 from .review import _window_payload, build_windows  # reutiliza agrupación y formato
 
 PHASE1_PROMPT = """Resume esta parte de una reunión transcrita para identificar su estructura.
@@ -59,7 +60,8 @@ def run_meeting_job(project_id: str, job: Job) -> None:
     windows = build_windows(transcript, window_minutes)
 
     try:
-        client = LlmClient()
+        client = LlmClient(overrides="meeting_1")
+        meeting_2_client = LlmClient(overrides="meeting_2")
     except LlmError as exc:
         _save_error(str(exc))
         raise
@@ -73,15 +75,16 @@ def run_meeting_job(project_id: str, job: Job) -> None:
             progress=(i / len(windows)) * 80,
             detail=f"min {win[0]['start']/60:.0f}–{win[-1]['end']/60:.0f}",
         )
-        prompt = PHASE1_PROMPT.format(
+        prompt = prompts.render(
+            "meeting_1",
             win_lo=win[0]["start"] / 60,
             win_hi=win[-1]["end"] / 60,
             segments=_window_payload(win, speaker_names),
-        )
+        )["user"]
         try:
             data = client.chat_json(
                 [
-                    {"role": "system", "content": "Eres un analista experto en actas de reunión. Respondes solo JSON válido en español."},
+                    {"role": "system", "content": prompts.get_prompt("meeting_1_system")["system"]},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=3000,
@@ -106,10 +109,10 @@ def run_meeting_job(project_id: str, job: Job) -> None:
         for p in all_parts
     ]
     try:
-        data = client.chat_json(
+        data = meeting_2_client.chat_json(
             [
-                {"role": "system", "content": "Eres un analista experto en actas de reunión. Respondes solo JSON válido en español."},
-                {"role": "user", "content": PHASE2_PROMPT.format(parts=json.dumps(compact, ensure_ascii=False))},
+                {"role": "system", "content": prompts.get_prompt("meeting_2_system")["system"]},
+                {"role": "user", "content": prompts.render("meeting_2", parts=json.dumps(compact, ensure_ascii=False))["user"]},
             ],
             max_tokens=6000,
         )

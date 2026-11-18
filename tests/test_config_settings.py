@@ -30,6 +30,32 @@ def test_load_config_migrates_v1_and_preserves_values(tmp_path, monkeypatch):
     }
 
 
+def test_advanced_settings_defaults_preserve_existing_limits():
+    assert config.DEFAULT_CONFIG["advanced"] == {
+        "max_suggestions": 10,
+        "report_template_max_chars": 12000,
+        "report_meeting_max_chars": 6000,
+        "report_instructions_max_chars": 4000,
+        "report_notes_max_chars": 120000,
+    }
+
+
+def test_put_settings_persists_advanced_settings(monkeypatch):
+    captured = {}
+    previous = config.DEFAULT_CONFIG
+    monkeypatch.setattr(settings, "load_config", lambda: previous)
+
+    def fake_save_config(payload):
+        captured.update(payload)
+        return config._deep_merge(previous, payload)
+
+    monkeypatch.setattr(settings, "save_config", fake_save_config)
+
+    settings.put_settings(SettingsPatch.model_validate({"advanced": {"max_suggestions": 5}}))
+
+    assert captured == {"advanced": {"max_suggestions": 5}}
+
+
 def test_get_settings_masks_secrets(monkeypatch):
     monkeypatch.setattr(
         settings,

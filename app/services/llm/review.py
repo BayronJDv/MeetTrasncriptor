@@ -14,6 +14,7 @@ from typing import Any
 from ... import config
 from ...jobs import Job, JobCancelled
 from ..llm.client import LlmClient, LlmError
+from . import prompts
 
 SYSTEM_PROMPT = (
     "Eres un revisor experto de transcripciones automáticas (ASR) de reuniones en español. "
@@ -140,6 +141,7 @@ def run_review_job(project_id: str, job: Job) -> None:
     cfg = config.load_config()
     window_minutes = cfg["llm"].get("window_minutes", 10)
     concurrency = max(1, min(4, cfg["llm"].get("concurrency", 2)))
+    max_suggestions = cfg["advanced"].get("max_suggestions", 10)
 
     state = review_suggestion_state(project_id)
     state["status"] = "running"
@@ -162,7 +164,7 @@ def run_review_job(project_id: str, job: Job) -> None:
         return
 
     try:
-        client = LlmClient()
+        client = LlmClient(overrides="review")
     except LlmError as exc:
         state["status"] = "error"
         state["error"] = str(exc)
@@ -176,14 +178,15 @@ def run_review_job(project_id: str, job: Job) -> None:
         h, win = item
         if job.cancel_event.is_set():
             raise JobCancelled()
-        prompt = USER_TEMPLATE.format(
+        prompt = prompts.render(
+            "review_user",
             segments=_window_payload(win, speaker_names),
-            max_suggestions=10,
-        )
+            max_suggestions=max_suggestions,
+        )["user"]
         try:
             data = client.chat_json(
                 [
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": prompts.get_prompt("review_system")["system"]},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=2048,

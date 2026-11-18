@@ -52,12 +52,21 @@ class ReportSettings(BaseModel):
     export_format: Literal["docx", "md"] = "docx"
 
 
+class AdvancedSettings(BaseModel):
+    max_suggestions: int = Field(default=10, ge=1)
+    report_template_max_chars: int = Field(default=12000, ge=1)
+    report_meeting_max_chars: int = Field(default=6000, ge=1)
+    report_instructions_max_chars: int = Field(default=4000, ge=1)
+    report_notes_max_chars: int = Field(default=120000, ge=1)
+
+
 class SettingsPatch(BaseModel):
     asr: Optional[AsrSettings] = None
     diar: Optional[DiarSettings] = None
     llm: Optional[LlmSettings] = None
     prompts: Optional[dict[str, PromptSettings]] = None
     report: Optional[ReportSettings] = None
+    advanced: Optional[AdvancedSettings] = None
 
 
 # ---------- hablantes ----------

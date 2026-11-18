@@ -12,6 +12,7 @@ import json
 from ... import config
 from ...jobs import Job
 from ..llm.client import LlmClient
+from . import prompts
 from .review import _window_payload, build_windows
 
 PHASE1_PROMPT = """Genera notas detalladas de esta parte de una reunión para redactar un acta.
@@ -70,7 +71,9 @@ def run_report_job(
         raise RuntimeError("El proyecto no tiene transcripción")
 
     cfg = config.load_config()
-    client = LlmClient()
+    advanced = cfg["advanced"]
+    client = LlmClient(overrides="report_1")
+    report_2_client = LlmClient(overrides="report_2")
     speaker_names = {s["id"]: (s.get("name") or s["id"]) for s in transcript.get("speakers", [])}
     windows = build_windows(transcript, max(10, cfg["llm"].get("window_minutes", 10) * 1.5))
 
@@ -88,15 +91,16 @@ def run_report_job(
             progress=(i / len(windows)) * 60,
             detail=f"min {win[0]['start']/60:.0f}–{win[-1]['end']/60:.0f}",
         )
-        prompt = PHASE1_PROMPT.format(
+        prompt = prompts.render(
+            "report_1",
             win_lo=win[0]["start"] / 60,
             win_hi=win[-1]["end"] / 60,
             segments=_window_payload(win, speaker_names),
-        )
+        )["user"]
         try:
             notes = client.chat(
                 [
-                    {"role": "system", "content": "Eres un secretário de actas meticuloso. Trabajas en español."},
+                    {"role": "system", "content": prompts.get_prompt("report_1_system")["system"]},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=3500,
@@ -117,30 +121,31 @@ def run_report_job(
     if template_name:
         template_text = read_template(template_name).strip()
         if template_text:
-            template_block = f"PLANTILLA DEL INFORME (estructura y secciones a respetar):\n\n---\n{template_text[:12000]}\n---\n\n"
+            template_block = f"PLANTILLA DEL INFORME (estructura y secciones a respetar):\n\n---\n{template_text[:advanced.get('report_template_max_chars', 12000)]}\n---\n\n"
     meeting_block = ""
     if include_meeting:
         meeting = config.load_json(project_id, "meeting.json") or {}
         sections = meeting.get("sections") or []
         if sections:
             outline = json.dumps(sections, ensure_ascii=False, indent=1)
-            meeting_block = f"ESTRUCTURA DETECTADA DE LA REUNIÓN (útil como guía):\n{outline[:6000]}\n\n"
+            meeting_block = f"ESTRUCTURA DETECTADA DE LA REUNIÓN (útil como guía):\n{outline[:advanced.get('report_meeting_max_chars', 6000)]}\n\n"
     instructions_block = ""
     if instructions.strip():
-        instructions_block = f"INDICACIONES ADICIONALES DEL USUARIO:\n{instructions.strip()[:4000]}\n"
+        instructions_block = f"INDICACIONES ADICIONALES DEL USUARIO:\n{instructions.strip()[:advanced.get('report_instructions_max_chars', 4000)]}\n"
 
     notes_text = "\n\n".join(
         f"[min {n['start']/60:.0f}–{n['end']/60:.0f}]\n{n['notes']}" for n in work["notes"]
     )
-    markdown = client.chat(
+    markdown = report_2_client.chat(
         [
-            {"role": "system", "content": "Eres un redactor profesional de informes y actas de reunión en español. Escribe claro, formal y fiel a los datos."},
-            {"role": "user", "content": PHASE2_PROMPT.format(
+            {"role": "system", "content": prompts.get_prompt("report_2_system")["system"]},
+            {"role": "user", "content": prompts.render(
+                "report_2",
                 template_block=template_block,
                 meeting_block=meeting_block,
-                notes=notes_text[:120000],
+                notes=notes_text[:advanced.get('report_notes_max_chars', 120000)],
                 instructions_block=instructions_block,
-            )},
+            )["user"]},
         ],
         max_tokens=8000,
     )

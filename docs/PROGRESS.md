@@ -12,4 +12,9 @@
 - Archivos clave: `app/services/llm/client.py`, nuevo `app/routers/llm.py`, registro en `app/main.py`, `tests/test_llm.py`.
 - `PROVIDERS.get` evita KeyError por provider desconocido; `list_models` registra errores sin propagar excepción y devuelve `[]`.
 - Tests escritos para overrides, parseo `/api/tags`, provider desconocido, reset de prompt y Ollama no disponible; pendientes de ejecutar por el usuario.
-- Pendiente: P1-4 conexión de jobs y uso de prompts registrados.
+- Tarea completada: P1-4, jobs de review/meeting/report integrados con prompts configurables y overrides por cada fase.
+- `advanced` expone max_suggestions (10) y límites del informe (12000/6000/4000/120000), persistidos por ajustes.
+- Tests de contrato comparan los cinco prompts con el render anterior y verifican un prompt editado; tests pendientes de ejecución por el usuario.
+- Archivos clave: `app/services/llm/{review,meeting,report}.py`, config/schemas/settings, `tests/test_llm_job_prompts.py`, `tests/test_config_settings.py`.
+- Verificación sintáctica con `python3 -m py_compile`; no se ejecutaron tests.
+- Siguiente: P1-5, parseo de respuestas.

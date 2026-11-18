@@ -64,6 +64,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "report": {
         "export_format": "docx",
     },
+    "advanced": {
+        "max_suggestions": 10,
+        "report_template_max_chars": 12000,
+        "report_meeting_max_chars": 6000,
+        "report_instructions_max_chars": 4000,
+        "report_notes_max_chars": 120000,
+    },
     "server": {
         "host": "127.0.0.1",
         "port": 8000,
