@@ -6,3 +6,4 @@
 - Wants solutions sized to this machine's actual hardware — it has a weak GPU (MX150, 2GB VRAM) and 16GB RAM; detect/ask for specs and default to CPU-friendly configs. Confidence: 0.75
 - On this Windows machine, edit JSON config/data files with Python (`encoding='utf-8'`), never PowerShell 5.1 `Set-Content` — it prepends a BOM that breaks `json.loads`, silently falls back to defaults and wiped the user's stored API keys once. Confidence: 0.8
 - Do not execute tests on their behalf; write the tests and provide the exact commands for the user to run them. Confidence: 0.9
+- Prefers tightly scoped code changes that do only what the task requests; if a requirement cannot be met or reality differs from the specification, stop and ask before proceeding. Confidence: 0.85
