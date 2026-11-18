@@ -101,3 +101,16 @@ def test_list_models_returns_empty_when_ollama_is_unavailable(monkeypatch):
     monkeypatch.setattr(client.httpx, "get", raise_connection_error)
 
     assert client.list_models("ollama", "http://localhost:11434/v1", "") == []
+
+
+def test_put_prompt_persists_after_config_reload(tmp_path, monkeypatch):
+    config_path = tmp_path / "config.json"
+    monkeypatch.setattr(config, "CONFIG_PATH", config_path)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config, "PROJECTS_DIR", tmp_path / "projects")
+    monkeypatch.setattr(config, "TEMPLATES_DIR", tmp_path / "templates")
+    edited = {"system": "", "user": "PROMPT EDITADO {segments} / {max_suggestions}"}
+
+    llm.put_prompts({"review_user": edited})
+
+    assert config.load_config()["prompts"]["review_user"] == edited
