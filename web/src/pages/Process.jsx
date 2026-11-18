@@ -8,12 +8,15 @@ export default function ProcessPage() {
   const job = useJob()
   const [meta, setMeta] = useState(null)
   const [config, setConfig] = useState(null)
+  const [engines, setEngines] = useState([])
   const [error, setError] = useState(null)
 
   const refresh = async () => {
     try {
       setMeta(await api.get(`/projects/${projectId}`))
-      setConfig((await api.get('/settings')).config)
+      const [settings, catalog] = await Promise.all([api.get('/settings'), api.get('/catalog')])
+      setConfig(settings.config)
+      setEngines(catalog)
     } catch (e) {
       setError(e.message)
     }
@@ -98,10 +101,10 @@ export default function ProcessPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="mb-2 font-semibold">Configuración activa</h2>
           <ul className="grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
-            <li>Modelo Whisper: <b>{config.asr.model}</b> ({config.asr.device}, {config.asr.compute_type})</li>
-            <li>Idioma: <b>{config.asr.language}</b></li>
-            <li>Diarización: <b>{config.diar.hf_token ? 'activa' : 'sin token de HuggingFace'}</b></li>
-            <li>Tramos: <b>{config.asr.chunk_minutes} min</b></li>
+            <li>ASR: <b>{engines.find((engine) => engine.id === config.asr.engine)?.label || config.asr.engine}</b> · modelo <b>{config.asr.options?.[config.asr.engine]?.model || (config.asr.engine === 'whisperx' ? config.asr.model : 'No configurado')}</b></li>
+            <li>Idioma: <b>{config.asr.language || config.asr.options?.[config.asr.engine]?.language || 'automático'}</b></li>
+            <li>Diarización: <b>{engines.find((engine) => engine.id === config.diar.engine)?.label || config.diar.engine}</b> · modelo <b>{config.diar.options?.[config.diar.engine]?.model || (config.diar.engine === 'pyannote' ? 'pyannote/speaker-diarization-3.1' : 'No configurado')}</b></li>
+            <li>Tramos: <b>{config.asr.options?.[config.asr.engine]?.chunk_minutes || config.asr.chunk_minutes} min</b></li>
           </ul>
           <Link to="/ajustes" className="mt-3 inline-block text-sm text-blue-600 hover:underline">
             Cambiar en Ajustes →

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '../components.jsx'
 import PromptEditor from '../components/settings/PromptEditor.jsx'
+import EnginePanel from '../components/settings/EnginePanel.jsx'
 
 const MODELS = ['tiny', 'base', 'small', 'medium', 'large-v2', 'large-v3']
 const LANGS = ['es', 'en', 'pt', 'fr', 'de', 'it', '']
@@ -84,17 +85,6 @@ export default function SettingsPage() {
     setSaved(false)
   }
 
-  const applyRecommendation = () => {
-    if (!system?.recommendation) return
-    const r = system.recommendation
-    setCfg((c) => ({
-      ...c,
-      asr: { ...c.asr, device: r.asr_device, compute_type: r.compute_type, model: r.model },
-      diar: { ...c.diar, device: r.diar_device },
-    }))
-    setSaved(false)
-  }
-
   if (!cfg) return <p className="p-6 text-sm text-slate-500">Cargando ajustes…</p>
 
   const providerModels = data?.providers?.[cfg.llm.provider]?.models || []
@@ -112,7 +102,6 @@ export default function SettingsPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="font-semibold">Este equipo</h2>
-            <button onClick={applyRecommendation} className={btnSecondary}>Aplicar recomendación</button>
           </div>
           <ul className="grid gap-1 text-slate-600 sm:grid-cols-2">
             <li>CPU: {system.cpu || '—'}</li>
@@ -123,6 +112,8 @@ export default function SettingsPage() {
           <p className="mt-2 text-xs text-slate-500">{system.recommendation?.note}</p>
         </div>
       )}
+
+      <EnginePanel cfg={cfg} onChange={patch} system={system} />
 
       {/* ---- WhisperX ---- */}
       <section className="rounded-xl border border-slate-200 bg-white p-4">
