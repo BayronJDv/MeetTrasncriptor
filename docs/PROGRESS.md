@@ -17,4 +17,5 @@
 - P2-7: `python3 -m pytest tests/test_catalog.py -q` confirmado por el usuario: 6 passed; 3 avisos deprecados de Starlette/httpx y FastAPI `on_event`.
 - P2-8: panel de selección de motores y requisitos desde catálogo; instalación con progreso consultando el job, recomendaciones/atribución y motores/modelos activos en Process.
 - Build web `pnpm run build` pasó; suite completa pendiente de ejecución por el usuario.
+- P2-9: verificación estática confirma contrato, progreso 0-100, cancelación, diarización none y recomendaciones; ampliado test para asegurar que `/api/system` (estado) y `/api/catalog` no importan motores pesados. Tests y checklist manual pendientes del usuario.
 - Pytest está instalado solo en `.venv` y no se ejecutó por regla del repo.

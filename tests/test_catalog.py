@@ -83,8 +83,11 @@ def test_install_command_uses_only_catalog_extra(monkeypatch):
     assert len(calls) == 1
 
 
-def test_system_and_catalog_do_not_import_torch(client, monkeypatch):
-    monkeypatch.delitem(sys.modules, "torch", raising=False)
+def test_system_and_catalog_do_not_import_heavy_engines(client, monkeypatch):
+    heavy_modules = ("torch", "whisperx", "pyannote", "faster_whisper", "nemo", "llama_cpp", "ctranslate2")
+    for module in heavy_modules:
+        monkeypatch.delitem(sys.modules, module, raising=False)
+
     response = client.get("/api/system")
     assert response.status_code == 200
     assert "ram_gb" in response.json()
@@ -92,7 +95,7 @@ def test_system_and_catalog_do_not_import_torch(client, monkeypatch):
     assert "vram_gb" in response.json()
     assert "recommendations" in response.json()
     assert client.get("/api/catalog").status_code == 200
-    assert "torch" not in sys.modules
+    assert all(module not in sys.modules for module in heavy_modules)
 
 
 def test_startup_does_not_initialize_ffmpeg_or_download_models(monkeypatch):

@@ -14,3 +14,4 @@
 - Prefers using `uv` to create Python virtual environments with the required Python version. Confidence: 0.9
 - When managing Python packages with uv, use the `uv pip ...` command rather than invoking `python -m pip`. Confidence: 0.9
 - Prefers `pnpm` over `npm` for all web dependency-management and installation commands. Confidence: 0.95
+- Wants to personally decide engine/default changes only after reviewing results from a real-world comparison; do not change the default preemptively. Confidence: 0.86
