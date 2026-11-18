@@ -1,8 +1,4 @@
-"""Utilidades de FFmpeg: usa el binario de imageio-ffmpeg (sin instalación de sistema).
-
-Deja el binario también como data/bin/ffmpeg.exe y lo añade a PATH para que
-whisperx.load_audio (que invoca `ffmpeg` por nombre) funcione sin FFmpeg instalado.
-"""
+"""Utilidades de FFmpeg con el binario de imageio-ffmpeg como alternativa local."""
 from __future__ import annotations
 
 import os
@@ -49,6 +45,21 @@ def run_ffmpeg(args: list[str], timeout: int = 3600) -> None:
     proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg falló: {proc.stderr.strip()[:500]}")
+
+
+def decode_audio(source: Path, sample_rate: int = 16000) -> bytes:
+    """Decodifica audio mono como muestras PCM float32 a la frecuencia indicada."""
+    proc = subprocess.run(
+        [
+            get_ffmpeg(), "-hide_banner", "-loglevel", "error", "-i", str(source),
+            "-f", "f32le", "-acodec", "pcm_f32le", "-ac", "1", "-ar", str(sample_rate), "pipe:1",
+        ],
+        capture_output=True,
+        timeout=3600,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg falló: {proc.stderr.decode(errors='replace').strip()[:500]}")
+    return proc.stdout
 
 
 def make_playback_copy(source: Path, dest: Path) -> bool:

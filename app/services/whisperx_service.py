@@ -3,14 +3,10 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Callable
-
-import numpy as np
 
 from .. import config
 from ..jobs import Job, JobCancelled
-
-SR = 16000
+from .audio.chunking import SR, compute_chunks, load_audio
 
 _model_cache: dict = {}
 
@@ -39,41 +35,15 @@ def load_alignment_model(language: str):
     return _model_cache[key]
 
 
-def snap_boundary(audio: np.ndarray, target_sec: float, search: float = 3.0, frame_ms: int = 30) -> float:
-    """Busca el punto de mínima energía (silencio) cerca de target_sec."""
-    frame = int(SR * frame_ms / 1000)
-    lo = max(0, int((target_sec - search) * SR))
-    hi = min(len(audio), int((target_sec + search) * SR))
-    if hi - lo < frame * 3:
-        return target_sec
-    seg = audio[lo:hi]
-    n = len(seg) // frame
-    energy = (seg[: n * frame].reshape(n, frame) ** 2).mean(axis=1)
-    idx = int(energy.argmin())
-    return (lo + idx * frame + frame / 2) / SR
-
-
-def compute_chunks(audio: np.ndarray, chunk_minutes: int) -> list[tuple[float, float]]:
-    total = len(audio) / SR
-    win = chunk_minutes * 60
-    raw = [x * win for x in range(0, int(total // win) + 1) if x * win > 0]
-    raw = [s for s in raw if s < total - 10]
-    cuts = [0.0] + [snap_boundary(audio, s) for s in raw] + [total]
-    return [(cuts[i], cuts[i + 1]) for i in range(len(cuts) - 1) if cuts[i + 1] - cuts[i] > 0.5]
-
-
 def transcribe_and_diarize(project_id: str, audio_path: Path, job: Job) -> None:
     import torch  # noqa: F401  (asegura backend antes de whisperx)
     import whisperx
 
-    from ..ffmpeg_utils import get_ffmpeg
     from ..jobs import manager
     from .diarization import diarize_to_dataframe
 
     cfg = config.load_config()
     cfg_asr, cfg_diar = cfg["asr"], cfg["diar"]
-
-    get_ffmpeg()  # asegura PATH para whisperx.load_audio
 
     t0 = time.time()
     manager.update(job, stage="Cargando modelo", detail=f"{cfg_asr['model']} ({cfg_asr['device']}, {cfg_asr['compute_type']})")
@@ -81,8 +51,9 @@ def transcribe_and_diarize(project_id: str, audio_path: Path, job: Job) -> None:
     model = load_asr_model(cfg_asr)
 
     manager.update(job, stage="Leyendo audio", detail="Decodificando a 16 kHz…")
-    audio = whisperx.load_audio(str(audio_path))
-    duration = len(audio) / SR
+    audio_buffer = load_audio(audio_path)
+    audio = audio_buffer.samples
+    duration = audio_buffer.duration
     job.log_line(manager, f"Audio: {duration/60:.1f} min")
 
     chunks = compute_chunks(audio, cfg_asr["chunk_minutes"])

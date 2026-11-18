@@ -10,3 +10,4 @@
 - When navigating code, locate implementation by function name rather than line number. Confidence: 0.9
 - When a task requires changes beyond the initially described scope, document the decision and resulting changes in both the progress log and suggested commit message. Confidence: 0.9
 - For repository tasks, wants a concise final report covering changes, files touched, exact test commands for the user, and risks; also wants a brief progress-log update and a suggested commit in `[ID] summary` format. Confidence: 0.9
+- Prefers delegating mechanical, repetitive repository work to subagents and using token-efficient workflows such as bounded file reads and concise outputs. Confidence: 0.85
