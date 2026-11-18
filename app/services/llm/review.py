@@ -14,7 +14,7 @@ from typing import Any
 from ... import config
 from ...jobs import Job, JobCancelled
 from ..llm.client import LlmClient, LlmError
-from . import prompts
+from . import json_utils, prompts
 
 SYSTEM_PROMPT = (
     "Eres un revisor experto de transcripciones automáticas (ASR) de reuniones en español. "
@@ -172,6 +172,7 @@ def run_review_job(project_id: str, job: Job) -> None:
         raise
     done_count = 0
     provider_errors: list[str] = []
+    json_errors: list[str] = []
 
     def process_window(item: tuple[str, list[dict]]) -> None:
         nonlocal done_count
@@ -184,13 +185,20 @@ def run_review_job(project_id: str, job: Job) -> None:
             max_suggestions=max_suggestions,
         )["user"]
         try:
-            data = client.chat_json(
+            data = json_utils.chat_json_with_retry(
+                client,
                 [
                     {"role": "system", "content": prompts.get_prompt("review_system")["system"]},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=2048,
+                stage="revisión de transcripción",
+                required_key="sugerencias",
             )
+        except json_utils.JsonResponseError as exc:
+            json_errors.append(str(exc))
+            job.log_line(manager, str(exc))
+            return
         except Exception as exc:  # noqa: BLE001
             if not provider_errors:
                 provider_errors.append(f"{type(exc).__name__}: {exc}")
@@ -239,6 +247,12 @@ def run_review_job(project_id: str, job: Job) -> None:
         futures = [pool.submit(process_window, item) for item in pending]
         for f in as_completed(futures):
             f.result()
+
+    if json_errors:
+        state["status"] = "error"
+        state["error"] = json_errors[0]
+        config.save_json(project_id, "review.json", state)
+        raise RuntimeError(state["error"])
 
     if pending and done_count == 0 and provider_errors:
         state["status"] = "error"

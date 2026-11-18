@@ -80,6 +80,7 @@ Devuelve EXCLUSIVAMENTE JSON válido:
 Incluye: temas tratados en orden, quién dijo qué (usando los nombres reales de los hablantes),
 decisiones, votos, cifras y compromisos con sus tiempos aproximados (segundos).
 Sé exhaustivo pero conciso. Español. Lista con viñetas.
+Devuelve únicamente un objeto JSON válido con esta forma: {{"notes": "texto de las notas"}}.
 
 Transcripción (min {win_lo}–{win_hi}):
 {segments}""",
@@ -102,7 +103,7 @@ Requisitos:
 - Usa los nombres reales de los hablantes, no SPEAKER_XX.
 - Cita tiempos aproximados cuando aporten (formato mm:ss).
 - No inventes información que no esté en las notas.
-- Devuelve SOLO el contenido del informe en Markdown, sin explicaciones.""",
+- Devuelve únicamente un objeto JSON válido con esta forma: {{"markdown": "informe completo en Markdown"}}.""",
     },
 }
 

@@ -12,13 +12,14 @@ import json
 from ... import config
 from ...jobs import Job
 from ..llm.client import LlmClient
-from . import prompts
+from . import json_utils, prompts
 from .review import _window_payload, build_windows
 
 PHASE1_PROMPT = """Genera notas detalladas de esta parte de una reunión para redactar un acta.
 Incluye: temas tratados en orden, quién dijo qué (usando los nombres reales de los hablantes),
 decisiones, votos, cifras y compromisos con sus tiempos aproximados (segundos).
 Sé exhaustivo pero conciso. Español. Lista con viñetas.
+Devuelve únicamente un objeto JSON válido con esta forma: {{"notes": "texto de las notas"}}.
 
 Transcripción (min {win_lo}–{win_hi}):
 {segments}"""
@@ -35,7 +36,7 @@ Requisitos:
 - Usa los nombres reales de los hablantes, no SPEAKER_XX.
 - Cita tiempos aproximados cuando aporten (formato mm:ss).
 - No inventes información que no esté en las notas.
-- Devuelve SOLO el contenido del informe en Markdown, sin explicaciones."""
+- Devuelve únicamente un objeto JSON válido con esta forma: {{"markdown": "informe completo en Markdown"}}."""
 
 
 def read_template(name: str) -> str:
@@ -98,13 +99,20 @@ def run_report_job(
             segments=_window_payload(win, speaker_names),
         )["user"]
         try:
-            notes = client.chat(
+            response = json_utils.chat_json_with_retry(
+                client,
                 [
                     {"role": "system", "content": prompts.get_prompt("report_1_system")["system"]},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=3500,
+                stage=f"generación de notas del informe, tramo {i + 1}",
+                required_key="notes",
+                required_value_type=str,
             )
+            notes = response["notes"]
+        except json_utils.JsonResponseError:
+            raise
         except Exception as exc:  # noqa: BLE001
             job.log_line(manager, f"Tramo {i + 1} omitido: {exc}")
             continue
@@ -136,7 +144,8 @@ def run_report_job(
     notes_text = "\n\n".join(
         f"[min {n['start']/60:.0f}–{n['end']/60:.0f}]\n{n['notes']}" for n in work["notes"]
     )
-    markdown = report_2_client.chat(
+    response = json_utils.chat_json_with_retry(
+        report_2_client,
         [
             {"role": "system", "content": prompts.get_prompt("report_2_system")["system"]},
             {"role": "user", "content": prompts.render(
@@ -148,7 +157,11 @@ def run_report_job(
             )["user"]},
         ],
         max_tokens=8000,
+        stage="redacción del informe final",
+        required_key="markdown",
+        required_value_type=str,
     )
+    markdown = response["markdown"]
 
     config.save_json(project_id, "informe.md.json", {"markdown": markdown})
     (config.project_dir(project_id) / "informe.md").write_text(markdown, encoding="utf-8")

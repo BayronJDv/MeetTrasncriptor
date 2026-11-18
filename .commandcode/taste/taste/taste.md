@@ -8,3 +8,4 @@
 - Do not execute tests on their behalf; write the tests and provide the exact commands for the user to run them. Confidence: 0.9
 - Prefers tightly scoped code changes that do only what the task requests; if a requirement cannot be met or reality differs from the specification, stop and ask before proceeding. Confidence: 0.85
 - When navigating code, locate implementation by function name rather than line number. Confidence: 0.9
+- When a task requires changes beyond the initially described scope, document the decision and resulting changes in both the progress log and suggested commit message. Confidence: 0.9

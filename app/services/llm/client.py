@@ -5,9 +5,7 @@ Reintentos con backoff exponencial para respetar límites del plan gratuito.
 """
 from __future__ import annotations
 
-import json
 import logging
-import re
 import time
 from typing import Any
 from urllib.parse import urlsplit
@@ -15,6 +13,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from ... import config
+from .json_utils import extract_json
 
 PROVIDERS: dict[str, dict[str, Any]] = {
     "groq": {
@@ -169,30 +168,3 @@ def list_models(provider: str, base_url: str, api_key: str) -> list[str]:
         return []
 
 
-def extract_json(text: str) -> Any:
-    """Extrae el primer objeto/array JSON de una respuesta (tolera ```json y texto extra)."""
-    text = text.strip()
-    fence = re.search(r"```(?:json)?\s*(.+?)```", text, re.DOTALL)
-    if fence:
-        text = fence.group(1).strip()
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    # buscar el bloque balanceado más externo
-    for opener, closer in (("{", "}"), ("[", "]")):
-        start = text.find(opener)
-        if start == -1:
-            continue
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == opener:
-                depth += 1
-            elif text[i] == closer:
-                depth -= 1
-                if depth == 0:
-                    try:
-                        return json.loads(text[start: i + 1])
-                    except json.JSONDecodeError:
-                        break
-    raise LlmError(f"El modelo no devolvió JSON válido:\n{text[:400]}")

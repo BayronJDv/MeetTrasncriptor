@@ -1,7 +1,7 @@
 ---
 description: Subagente para tareas mecánicas, repetitivas y acotadas (mover texto literal, aplicar el mismo cambio en varios archivos, escribir tests con patrón dado, inventarios con grep). No toma decisiones de diseño.
 mode: subagent
-model: thinkingmachines/inkling-2-small:free
+model: qwen/qwen3.7-flash
 temperature: 0.1
 tools:
   bash: false

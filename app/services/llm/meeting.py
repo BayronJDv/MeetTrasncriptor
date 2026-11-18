@@ -10,7 +10,7 @@ import json
 from ... import config
 from ...jobs import Job
 from ..llm.client import LlmClient, LlmError
-from . import prompts
+from . import json_utils, prompts
 from .review import _window_payload, build_windows  # reutiliza agrupación y formato
 
 PHASE1_PROMPT = """Resume esta parte de una reunión transcrita para identificar su estructura.
@@ -82,13 +82,19 @@ def run_meeting_job(project_id: str, job: Job) -> None:
             segments=_window_payload(win, speaker_names),
         )["user"]
         try:
-            data = client.chat_json(
+            data = json_utils.chat_json_with_retry(
+                client,
                 [
                     {"role": "system", "content": prompts.get_prompt("meeting_1_system")["system"]},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=3000,
+                stage=f"análisis de reunión, ventana {i + 1}",
+                required_key="partes",
             )
+        except json_utils.JsonResponseError as exc:
+            _save_error(str(exc))
+            raise
         except LlmError as exc:
             _save_error(str(exc))
             raise
@@ -109,14 +115,20 @@ def run_meeting_job(project_id: str, job: Job) -> None:
         for p in all_parts
     ]
     try:
-        data = meeting_2_client.chat_json(
+        data = json_utils.chat_json_with_retry(
+            meeting_2_client,
             [
                 {"role": "system", "content": prompts.get_prompt("meeting_2_system")["system"]},
                 {"role": "user", "content": prompts.render("meeting_2", parts=json.dumps(compact, ensure_ascii=False))["user"]},
             ],
             max_tokens=6000,
+            stage="consolidación de reunión",
+            required_key="secciones",
         )
         sections = data.get("secciones") or []
+    except json_utils.JsonResponseError as exc:
+        _save_error(str(exc))
+        raise
     except Exception as exc:  # noqa: BLE001
         job.log_line(manager, f"Consolidación falló ({exc}); se usan las partes sin fusionar")
         sections = compact

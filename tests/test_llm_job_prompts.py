@@ -17,6 +17,7 @@ class FakeLlmClient:
     def __init__(self, overrides=None):
         self.overrides = overrides
         self.calls = []
+        self.model = "fake-model"
         self.instances.append(self)
 
     def chat_json(self, messages, max_tokens=None):
@@ -26,12 +27,11 @@ class FakeLlmClient:
             return {"partes": [{"tipo": "tema", "titulo": "Tema", "inicio": 0, "fin": 5, "resumen": "Resumen", "items": []}]}
         if self.overrides == "meeting_2":
             return {"secciones": []}
+        if self.overrides == "report_1":
+            return {"notes": "notas sintéticas"}
+        if self.overrides == "report_2":
+            return {"markdown": "# Informe"}
         return {"sugerencias": []}
-
-    def chat(self, messages, max_tokens=None):
-        self.calls.append(messages)
-        self.messages = messages
-        return "notas sintéticas" if self.overrides == "report_1" else "# Informe"
 
 
 def _run_jobs(monkeypatch, tmp_path, configured_prompts=None):
@@ -59,7 +59,7 @@ def _run_jobs(monkeypatch, tmp_path, configured_prompts=None):
     review.run_review_job("project", Job("review-id", "project", "review"))
     meeting.run_meeting_job("project", Job("meeting-id", "project", "meeting"))
     report.run_report_job("project", Job("report-id", "project", "report"), None, "Indicaciones", False)
-    return FakeLlmClient.instances
+    return FakeLlmClient.instances, saved
 
 
 def test_jobs_send_default_prompts_identical_to_legacy_render(monkeypatch, tmp_path):
@@ -69,7 +69,7 @@ def test_jobs_send_default_prompts_identical_to_legacy_render(monkeypatch, tmp_p
         "meeting.json": None,
         "report_work.json": None,
     }.get(name))
-    clients = _run_jobs(monkeypatch, tmp_path)
+    clients, saved = _run_jobs(monkeypatch, tmp_path)
     by_task = {client.overrides: client for client in clients}
     payload = review._window_payload(TRANSCRIPT["segments"], {"sp1": "Ana"})
     compact = [{"tipo": "tema", "titulo": "Tema", "inicio": 0, "fin": 5, "resumen": "Resumen", "items": []}]
@@ -88,9 +88,15 @@ def test_jobs_send_default_prompts_identical_to_legacy_render(monkeypatch, tmp_p
         assert messages[0]["content"] == prompts.DEFAULT_PROMPTS[f"{task}_system"]["system"]
         assert messages[1]["content"] == expected
 
+    assert set(saved["review.json"]) == {"status", "suggestions", "processed_windows"}
+    assert set(saved["meeting.json"]) == {"status", "sections"}
+    assert saved["report_work.json"]["notes"][0]["notes"] == "notas sintéticas"
+    assert set(saved["informe.md.json"]) == {"markdown"}
+    assert saved["informe.md.json"]["markdown"] == "# Informe"
+
 
 def test_review_job_uses_prompt_edited_in_config(monkeypatch, tmp_path):
-    clients = _run_jobs(
+    clients, _ = _run_jobs(
         monkeypatch,
         tmp_path,
         {"review_user": {"system": "", "user": "PROMPT EDITADO {segments} / {max_suggestions}"}},
