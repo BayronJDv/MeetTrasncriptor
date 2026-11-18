@@ -6,7 +6,7 @@
 2. **Catálogo + recomendador**: la app detecta el hardware y sugiere motores; al elegirlos muestra requisitos (token de Hugging Face, aceptación de términos de pyannote, RAM/VRAM, licencia) antes de instalar.
 3. **Contrato estable**: `transcript.json` conserva su forma actual (`app/services/whisperx_service.py:199-212`); clips, revisión, acta, informe y frontend no se rompen.
 4. **Fases independientes**: cada fase termina con la app funcionando y los tests pasando.
-
+5. App web local (127.0.0.1). El motor por defecto sigue siendo WhisperX + pyannote hasta que el usuario valide manualmente los motores nuevos.
 ## Por qué estos modelos (investigación 2026)
 
 | Necesidad | Recomendación | Por qué | Licencia / requisito |
@@ -16,9 +16,9 @@
 | ASR alternativa permisiva | **Qwen3-ASR 0.6B/1.7B** | Apache-2.0, 52 idiomas, español ~3,3-3,8 % | ~0,8-2 GB, más pesada que Parakeet |
 | Descartadas | SenseVoice (no cubre español, licencia no OSI), DiariZen/Sortformer v2 (pesos CC BY-NC) | — | — |
 | Diarización | **Nemotron-3-Diarization** (100 M, hasta 8 hablantes) | Voice Arena: DER 14,7 % vs 30,6 % de pyannote community-1; corre con Transformers, NeMo o GGUF | OpenMDW-1.1, uso comercial OK; verificar acceso a los pesos |
-| Diarización actual | pyannote community-1 | Sin límite de hablantes, pero token HF y términos gateados; lenta en CPU | CC-BY-4.0 |
+| Diarización actual | pyannote community-1.  | Sin límite de hablantes, pero token HF y términos gateados; lenta en CPU.  | CC-BY-4.0 |
 
-`NeMo-Speech.cpp` tiene instaladores en Linux/macOS/Windows y soporta Parakeet v3 y Nemotron-3. Es un proyecto joven: se deja como adaptador opcional, nunca como único camino.
+`NeMo-Speech.cpp` tiene instaladores en Linux/macOS/Windows y soporta Parakeet v3 y Nemotron-3. también incluye Sortformer v2 que son prohibidos, nunca se deben cargar. Es un proyecto joven: se deja como adaptador opcional, nunca como único camino.
 
 ---
 
@@ -29,7 +29,7 @@
 - `app/config.py:18-51`: añadir `schema_version: 2`; `llm.tasks` con 5 entradas (`review`, `meeting_1`, `meeting_2`, `report_1`, `report_2`), cada una con `model: null` (hereda el global), `max_tokens` y `timeout`; `prompts` con 10 entradas `{system, user}`; mantener las claves antiguas.
 - `app/config.py:61-103`: función `_migrate_v1(cfg)` invocada desde `load_config()` tras el deep-merge: convierte configuraciones sin `schema_version`, preserva `api_key` y rellena los defaults nuevos. El backup por JSON corrupto (`config.py:74-89`) queda intacto.
 - `app/schemas.py:28-48`: nuevos submodeles opcionales (`LlmTaskSettings`, `PromptSettings`) y corregir el desfase de `model` (`schemas.py:31` dice `llama-3.3-70b-versatile`, `config.py:37` dice `openai/gpt-oss-120b`). Los `model_dump(exclude_none=False)` actuales no deben borrar valores no enviados.
-- `app/routers/settings.py:68-76`: añadir las secciones nuevas a la lista editable. En `GET /api/settings` devolver `api_key` enmascarado (`********`) y en PUT conservar el valor anterior si llega el centinela.
+- `app/routers/settings.py:68-76`: añadir las secciones nuevas a la lista editable. En `GET /api/settings` devolver `api_key` y `hf_token` enmascarado (`********`) y en PUT conservar el valor anterior si llega el centinela.
 
 ### Paso 1.2 — Registro de prompts seguros
 
@@ -50,6 +50,9 @@
 - `review.py:165`, `meeting.py:62`, `report.py:73`: pasar `overrides` con la tarea correspondiente.
 - Sustituir los `.format(...)` de `review.py:179`, `meeting.py:76,112` y `report.py:91,138` por `prompts.render(...)`.
 - Exponer `max_suggestions` (`review.py:181`) y los límites de caracteres (`report.py:120,127,130,141`) como claves de configuración avanzada, conservando los valores actuales por defecto.
+
+#### Paso 1.4b
+Parseo robusto de JSON del LLM (extraer de cercas, tolerar comas finales, 1 reintento, error claro)
 
 ### Paso 1.5 — Interfaz
 

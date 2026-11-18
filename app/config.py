@@ -16,6 +16,7 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 BIN_DIR = DATA_DIR / "bin"
 
 DEFAULT_CONFIG: dict[str, Any] = {
+    "schema_version": 2,
     "asr": {
         "model": "small",
         "language": "es",
@@ -40,6 +41,25 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "window_minutes": 10,
         "concurrency": 2,
         "max_retries": 4,
+        "tasks": {
+            "review": {"model": None, "max_tokens": 2048, "timeout": 180},
+            "meeting_1": {"model": None, "max_tokens": 3000, "timeout": 180},
+            "meeting_2": {"model": None, "max_tokens": 6000, "timeout": 180},
+            "report_1": {"model": None, "max_tokens": 3500, "timeout": 180},
+            "report_2": {"model": None, "max_tokens": 8000, "timeout": 180},
+        },
+    },
+    "prompts": {
+        "review_system": {"system": "", "user": ""},
+        "review_user": {"system": "", "user": ""},
+        "meeting_1_system": {"system": "", "user": ""},
+        "meeting_1": {"system": "", "user": ""},
+        "meeting_2_system": {"system": "", "user": ""},
+        "meeting_2": {"system": "", "user": ""},
+        "report_1_system": {"system": "", "user": ""},
+        "report_1": {"system": "", "user": ""},
+        "report_2_system": {"system": "", "user": ""},
+        "report_2": {"system": "", "user": ""},
     },
     "report": {
         "export_format": "docx",
@@ -68,6 +88,14 @@ def _deep_merge(base: dict, patch: dict) -> dict:
     return out
 
 
+def _migrate_v1(cfg: dict) -> dict:
+    if cfg.get("schema_version", 1) >= 2:
+        return cfg
+    migrated = _deep_merge(DEFAULT_CONFIG, cfg)
+    migrated["schema_version"] = 2
+    return migrated
+
+
 def load_config() -> dict:
     ensure_dirs()
     with _lock:
@@ -85,7 +113,9 @@ def load_config() -> dict:
                     f"Se movió a {backup.name}; se usan valores por defecto."
                 )
                 stored = {}
-            return _deep_merge(DEFAULT_CONFIG, stored)
+            merged = _deep_merge(DEFAULT_CONFIG, stored)
+            merged["schema_version"] = stored.get("schema_version", 1)
+            return _migrate_v1(merged)
         return copy.deepcopy(DEFAULT_CONFIG)
 
 

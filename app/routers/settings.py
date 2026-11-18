@@ -57,23 +57,34 @@ def _ram_gb() -> float | None:
     return None
 
 
+def _mask_secrets(cfg: dict) -> dict:
+    cfg = dict(cfg)
+    cfg["llm"] = dict(cfg["llm"])
+    cfg["diar"] = dict(cfg["diar"])
+    cfg["llm"]["api_key"] = "********"
+    cfg["diar"]["hf_token"] = "********"
+    return cfg
+
+
 @router.get("/settings")
 def get_settings() -> dict:
-    cfg = load_config()
-    # nunca exponer la clave completa al frontend de más: se envía para poder editarla,
-    # pero la app corre solo en localhost
-    return {"config": cfg, "providers": PROVIDERS}
+    return {"config": _mask_secrets(load_config()), "providers": PROVIDERS}
 
 
 @router.put("/settings")
 def put_settings(patch: SettingsPatch) -> dict:
+    previous = load_config()
     payload = {}
-    for section in ("asr", "diar", "llm", "report"):
+    for section in ("asr", "diar", "llm", "prompts", "report"):
         part = getattr(patch, section)
         if part is not None:
-            payload[section] = part.model_dump(exclude_none=False)
+            payload[section] = part.model_dump(exclude_unset=True)
+    for section, key in (("llm", "api_key"), ("diar", "hf_token")):
+        values = payload.get(section, {})
+        if values.get(key) == "********":
+            values[key] = previous[section].get(key, "")
     cfg = save_config(payload)
-    return {"config": cfg}
+    return {"config": _mask_secrets(cfg)}
 
 
 @router.get("/system")
