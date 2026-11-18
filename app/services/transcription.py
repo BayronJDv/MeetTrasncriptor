@@ -20,6 +20,7 @@ ENGINE_REGISTRY = {
     },
     "diar": {
         "pyannote": (".engines.diar.pyannote", "PyannoteEngine"),
+        "nemotron_gguf": (".engines.diar.nemotron_gguf", "NemotronGGUFEngine"),
         "none": (".engines.diar.none", "NoDiarizationEngine"),
     },
 }
@@ -119,13 +120,16 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
     speakers_found: list[str] = []
     turns: list[Turn] = []
     diar_token = cfg_diar.get("hf_token")
+    diarization_enabled = diar_id == "nemotron_gguf" or bool(diar_token)
+    diar_warnings: list[str] = []
     if diar_id == "none":
         job.log_line(manager, "Motor de diarización desactivado")
-    elif diar_token:
+    elif diarization_enabled:
         check_cancel()
         update_progress("Diarizando", 62, "Identificando voces…")
         job.log_line(manager, f"Ejecutando diarización {diar_engine.info().name}…")
         diar_engine.load(cfg_diar, check_cancel=check_cancel)
+        diar_warnings.extend(getattr(diar_engine, "warnings", []))
         check_cancel()
 
         def on_diar_progress(stage: str, fraction: float, detail: str) -> None:
@@ -134,6 +138,9 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
 
         check_cancel()
         turns = diar_engine.diarize(audio_path, on_diar_progress, check_cancel=check_cancel)
+        diar_warnings = list(dict.fromkeys([*diar_warnings, *getattr(diar_engine, "warnings", [])]))
+        for warning in diar_warnings:
+            job.log_line(manager, f"Advertencia: {warning}")
         check_cancel()
         speakers_found = sorted({turn.speaker for turn in turns})
         if turns:
@@ -182,7 +189,8 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
             "whisper_model": model_name,
             "device": cfg_asr.get("device", "auto"),
             "compute_type": cfg_asr.get("compute_type", "default"),
-            "diarized": bool(diar_token) and diar_id != "none",
+            "diarized": diarization_enabled and diar_id != "none",
+            **({"warnings": diar_warnings} if diar_warnings else {}),
         },
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "speakers": [{"id": speaker, "name": None, "clips": []} for speaker in speakers_found],
@@ -191,6 +199,14 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
     check_cancel()
     config.save_json(project_id, "transcript.json", transcript_doc)
     check_cancel()
-    config.save_meta(project_id, {"stage": "speakers", "duration": round(duration, 1), "language": language})
+    config.save_meta(
+        project_id,
+        {
+            "stage": "speakers",
+            "duration": round(duration, 1),
+            "language": language,
+            "warnings": diar_warnings,
+        },
+    )
     check_cancel()
     job.log_line(manager, f"Listo: {len(out_segments)} segmentos, {len(speakers_found)} hablantes en {time.time() - started_at:.0f}s")

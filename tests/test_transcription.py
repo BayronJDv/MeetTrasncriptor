@@ -226,3 +226,32 @@ def test_transcription_assigns_speakers_when_diarization_returns_turns(monkeypat
     assert updates and all(0 <= progress <= 100 for progress in updates)
     assert updates == sorted(updates)
     assert 62 in updates and 78 in updates and 95 in updates and updates[-1] == 98
+
+
+def test_nemotron_warning_is_visible_without_hf_token(monkeypatch, tmp_path):
+    job = Job("job", "project", "transcribe")
+    _install_fakes(monkeypatch, tmp_path, job)
+    cfg = {
+        "asr": dict(CFG["asr"], engine="whisperx", options={"whisperx": {}}),
+        "diar": {"engine": "nemotron_gguf", "options": {"nemotron_gguf": {}}},
+    }
+    monkeypatch.setattr(transcription.config, "load_config", lambda: cfg)
+
+    class NemotronDiar(FakeDiar):
+        warnings = ["Nemotron admite hasta 8 hablantes; para más, usa pyannote."]
+
+        def info(self):
+            return EngineInfo("nemotron_gguf", "Nemotron", "fake")
+
+    monkeypatch.setattr(transcription, "resolve_engines", lambda config, log: (FakeASR(), NemotronDiar()))
+    saved = {}
+    monkeypatch.setattr(transcription.config, "save_json", lambda project_id, name, data: saved.setdefault(name, data))
+    monkeypatch.setattr(transcription.config, "save_meta", lambda project_id, patch: saved.setdefault("meta", patch))
+
+    transcription.run("project", tmp_path / "audio.wav", job)
+
+    warning = "Nemotron admite hasta 8 hablantes; para más, usa pyannote."
+    assert saved["transcript.json"]["model"]["diarized"] is True
+    assert saved["transcript.json"]["model"]["warnings"] == [warning]
+    assert saved["meta"]["warnings"] == [warning]
+    assert any(warning in line for line in job.log)

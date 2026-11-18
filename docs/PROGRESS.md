@@ -15,4 +15,7 @@
 - NeMo-Speech.cpp 0.3.0 instalado localmente (CUDA) y Parakeet TDT v3 GGUF descargado/verificado (681 MiB) en `~/.cache/nemo-speech/models`; pytest 9.2.0 añadido solo a `.venv`.
 - `nemo-speech doctor`: CUDA/RTX 4070 disponible; CLI y GGUF listos para probar manualmente; pytest no ejecutado por regla del repo.
 - Integración manual: `NEMO_SPEECH_BINARY="$HOME/.local/bin/nemo-speech" PARAKEET_GGUF_MODEL="$HOME/.cache/nemo-speech/models/nvidia/parakeet-tdt-0.6b-v3/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/parakeet-tdt-0.6b-v3.q8_0.gguf" .venv/bin/python -m pytest tests/test_parakeet_gguf.py::test_parakeet_real_binary_transcribes_synthetic_audio -q`.
+- P2-6: verificación oficial completada; `diarize --format json` devuelve `segments[{start,end,speaker}]`; GGUF final identificado como `nvidia/Nemotron-3-Diarization`, OpenMDW-1.1, descargable vía `nemo-speech pull`.
+- P2-6: adaptador opcional Nemotron GGUF registrado; valida nombre/rol/runtime del GGUF local para excluir Sortformer, no usa token HF y mantiene pyannote como default.
+- P2-6: avisos por más de 8 hablantes/expectativa en log, transcript y meta; tests simulados escritos, pendientes de ejecución. No se descargó el modelo.
 - `python3 -m py_compile` y `git diff --check` pasaron; suite completa pendiente de ejecución por el usuario.
