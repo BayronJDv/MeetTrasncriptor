@@ -2,6 +2,8 @@
   "language": "es",
   "duration": 1.25,
   "model": {
+    "engine": "whisperx",
+    "model": "small",
     "whisper_model": "small",
     "device": "cpu",
     "compute_type": "int8",

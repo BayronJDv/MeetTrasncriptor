@@ -35,6 +35,10 @@ def validate_transcript(transcript: dict) -> None:
         assert key in model, f"transcript.model missing required key: {key}"
         assert_type(model[key], expected_type, f"transcript.model.{key}")
 
+    for key in ("engine", "model"):
+        if key in model:
+            assert_type(model[key], str, f"transcript.model.{key}")
+
     for index, speaker in enumerate(transcript["speakers"]):
         assert_type(speaker, dict, f"transcript.speakers[{index}]")
         for key, expected_type in {"id": str, "name": (str, type(None)), "clips": list}.items():

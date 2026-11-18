@@ -3,14 +3,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...audio.ports import EngineInfo, ProgressFn, Turn
+from ...audio.ports import CancelFn, EngineInfo, ProgressFn, Turn
 
 
 class NoDiarizationEngine:
-    def load(self, config: dict[str, Any] | None = None) -> None:
-        return None
+    def load(self, config: dict[str, Any] | None = None, check_cancel: CancelFn | None = None) -> None:
+        if check_cancel:
+            check_cancel()
 
-    def diarize(self, audio_path: Path, progress_cb: ProgressFn | None = None) -> list[Turn]:
+    def diarize(
+        self,
+        audio_path: Path,
+        progress_cb: ProgressFn | None = None,
+        check_cancel: CancelFn | None = None,
+    ) -> list[Turn]:
+        if check_cancel:
+            check_cancel()
         return []
 
     def unload(self) -> None:

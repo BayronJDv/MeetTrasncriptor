@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ...audio.ports import EngineInfo, ProgressFn, Turn
+from ...audio.ports import CancelFn, EngineInfo, ProgressFn, Turn
 
 
 def _is_gpu_error(exc: BaseException) -> bool:
@@ -17,17 +17,27 @@ class PyannoteEngine:
         self._pipeline_class = None
         self._config: dict[str, Any] = {}
 
-    def load(self, config: dict[str, Any]) -> None:
+    def load(self, config: dict[str, Any], check_cancel: CancelFn | None = None) -> None:
+        check_cancel = check_cancel or (lambda: None)
+        check_cancel()
         import torch
         from whisperx.diarize import DiarizationPipeline
 
         self._torch = torch
         self._pipeline_class = DiarizationPipeline
         self._config = config
+        check_cancel()
 
-    def diarize(self, audio_path: Path, progress_cb: ProgressFn) -> list[Turn]:
+    def diarize(
+        self,
+        audio_path: Path,
+        progress_cb: ProgressFn,
+        check_cancel: CancelFn | None = None,
+    ) -> list[Turn]:
         if self._torch is None or self._pipeline_class is None:
             raise RuntimeError("PyannoteEngine.load() debe ejecutarse antes de diarize()")
+        check_cancel = check_cancel or (lambda: None)
+        check_cancel()
 
         torch = self._torch
         want = self._config.get("device", "auto")
@@ -53,7 +63,9 @@ class PyannoteEngine:
                 kwargs["min_speakers"] = self._config["min_speakers"]
             if self._config.get("max_speakers"):
                 kwargs["max_speakers"] = self._config["max_speakers"]
+            check_cancel()
             annotation = pipeline(str(audio_path), progress_callback=on_progress, **kwargs)
+            check_cancel()
             return [
                 Turn(start=float(row["start"]), end=float(row["end"]), speaker=str(row["speaker"]))
                 for _, row in annotation.iterrows()

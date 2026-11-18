@@ -20,4 +20,8 @@
 - Añadidos tests sintéticos para `snap_boundary` y `compute_chunks` en `tests/test_audio_chunking.py`; pendientes de ejecución por el usuario.
 - P2-2: añadidos interfaz de motor y adaptadores WhisperX, pyannote, none y asignación neutral de hablantes; imports pesadas en `load()`.
 - Añadidos tests falsos de OOM GPU→CPU, degradación de asignación e imports lazy en `tests/test_engine_adapters.py`; pendientes de ejecución por el usuario.
-- Sintaxis validada con `python3 -m py_compile`; orquestador y router sin cambios. Riesgo: sin integración hasta P2-3.
+- P2-3: añadido `app/services/transcription.py`; wrapper mantiene el callable importado por router sin cambiarlo. Resuelve siempre WhisperX + pyannote; incluye ASR por chunks, alineación en adaptador, diarización, asignación y persistencia.
+- Progreso conserva etapas 5-60, 62-94, 95 y 98 con monotonicidad; cancelación antes/después de cargas, decode, chunks, alineación, diarización, asignación y guardados.
+- `transcript.model` añade `engine` y `model`, mantiene `whisper_model`, `diarized` y restantes claves/tipos; contrato acepta transcripciones antiguas.
+- Tests falsos añadidos para contrato, progreso, cancelación, alineación y resultado sin/con diarización; pendientes de ejecución por el usuario.
+- Verificación estática P2-3: `python3 -m py_compile` en archivos tocados y `git diff --check`; no se ejecutaron tests.
