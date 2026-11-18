@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api.js'
 import { ErrorNote, Field, btnPrimary, btnSecondary, inputCls } from '../components.jsx'
+import PromptEditor from '../components/settings/PromptEditor.jsx'
 
 const MODELS = ['tiny', 'base', 'small', 'medium', 'large-v2', 'large-v3']
 const LANGS = ['es', 'en', 'pt', 'fr', 'de', 'it', '']
@@ -12,13 +13,27 @@ export default function SettingsPage() {
   const [cfg, setCfg] = useState(null)
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(false)
+  const [llmModels, setLlmModels] = useState([])
+  const [connectionResult, setConnectionResult] = useState(null)
+  const [testingConnection, setTestingConnection] = useState(false)
+  const [selectedTask, setSelectedTask] = useState('review')
+
+  const loadLlmModels = async (provider) => {
+    try {
+      const result = await api.get(`/llm/models?provider=${encodeURIComponent(provider)}`)
+      setLlmModels(result.models || [])
+    } catch {
+      setLlmModels([])
+    }
+  }
 
   useEffect(() => {
-    Promise.all([api.get('/settings'), api.get('/system')])
-      .then(([s, sys]) => {
+    Promise.all([api.get('/settings'), api.get('/system'), api.get('/prompts')])
+      .then(([s, sys, prompts]) => {
         setData(s)
-        setCfg(s.config)
+        setCfg({ ...s.config, prompts })
         setSystem(sys)
+        loadLlmModels(s.config.llm.provider)
       })
       .catch((e) => setError(e.message))
   }, [])
@@ -37,6 +52,36 @@ export default function SettingsPage() {
     } catch (e) {
       setError(e.message)
     }
+  }
+
+  const testConnection = async () => {
+    setTestingConnection(true)
+    setConnectionResult(null)
+    try {
+      const result = await api.post('/llm/test', {
+        provider: cfg.llm.provider,
+        model: cfg.llm.model,
+        base_url: cfg.llm.base_url || undefined,
+      })
+      setConnectionResult(result)
+    } catch (e) {
+      setConnectionResult({ ok: false, error: e.message })
+    } finally {
+      setTestingConnection(false)
+    }
+  }
+
+  const patchTaskModel = (task, model) => {
+    setCfg((c) => ({
+      ...c,
+      llm: { ...c.llm, tasks: { ...c.llm.tasks, [task]: { ...c.llm.tasks?.[task], model } } },
+    }))
+    setSaved(false)
+  }
+
+  const patchPrompts = (prompts) => {
+    setCfg((c) => ({ ...c, prompts }))
+    setSaved(false)
   }
 
   const applyRecommendation = () => {
@@ -157,6 +202,8 @@ export default function SettingsPage() {
                 const models = data?.providers?.[p]?.models || []
                 setCfg((c) => ({ ...c, llm: { ...c.llm, provider: p, model: models[0] || c.llm.model, base_url: '' } }))
                 setSaved(false)
+                setConnectionResult(null)
+                loadLlmModels(p)
               }}
               className={inputCls}
             >
@@ -166,9 +213,44 @@ export default function SettingsPage() {
           <Field label="Modelo" hint="Escribe uno propio si el proveedor ofrece otros">
             <input list="model-suggestions" value={cfg.llm.model} onChange={(e) => patch('llm', 'model', e.target.value)} className={inputCls} />
             <datalist id="model-suggestions">
-              {providerModels.map((m) => <option key={m} value={m} />)}
+              {[...new Set([...providerModels, ...llmModels])].map((m) => <option key={m} value={m} />)}
             </datalist>
           </Field>
+          <Field label="Tarea LLM">
+            <select value={selectedTask} onChange={(e) => setSelectedTask(e.target.value)} className={inputCls}>
+              {Object.keys(cfg.llm.tasks || {}).map((task) => <option key={task} value={task}>{task}</option>)}
+            </select>
+          </Field>
+          <Field label={`Modelo para ${selectedTask}`} hint="Vacío = usar el modelo general">
+            <input
+              list="task-model-suggestions"
+              value={cfg.llm.tasks?.[selectedTask]?.model || ''}
+              placeholder={cfg.llm.model}
+              onChange={(e) => patchTaskModel(selectedTask, e.target.value || null)}
+              className={inputCls}
+            />
+            <datalist id="task-model-suggestions">
+              {[...new Set([...providerModels, ...llmModels])].map((m) => <option key={m} value={m} />)}
+            </datalist>
+          </Field>
+          <div className="flex items-end">
+            <button type="button" onClick={testConnection} disabled={testingConnection} className={btnSecondary}>
+              {testingConnection ? 'Probando…' : 'Probar conexión'}
+            </button>
+          </div>
+          {connectionResult && (
+            <p className={`sm:col-span-2 text-sm ${connectionResult.ok ? 'text-green-700' : 'text-red-700'}`}>
+              {connectionResult.ok ? 'Conexión correcta.' : connectionResult.error || 'No se pudo conectar.'}
+              {!connectionResult.ok && cfg.llm.provider === 'ollama' && (
+                <> Asegúrate de que Ollama está iniciado y ejecuta <code>ollama pull {cfg.llm.model}</code>.</>
+              )}
+            </p>
+          )}
+          {!llmModels.length && cfg.llm.provider === 'ollama' && (
+            <p className="sm:col-span-2 text-sm text-amber-700">
+              No se pudo conectar con Ollama o no hay modelos disponibles. Inicia Ollama y ejecuta <code>ollama pull {cfg.llm.model}</code>.
+            </p>
+          )}
           <Field label="API key" hint={data?.providers?.[cfg.llm.provider]?.needs_key ? 'Requerida para este proveedor (gratis en su web)' : 'No requerida'}>
             <input type="password" value={cfg.llm.api_key} onChange={(e) => patch('llm', 'api_key', e.target.value)} className={inputCls} />
           </Field>
@@ -189,6 +271,8 @@ export default function SettingsPage() {
           </Field>
         </div>
       </section>
+
+      <PromptEditor prompts={cfg.prompts || {}} onChange={patchPrompts} />
 
       <div className="flex justify-end">
         <button onClick={save} className={btnPrimary}>Guardar ajustes</button>

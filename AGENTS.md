@@ -43,7 +43,7 @@ Antes de empezar una tarea, pregúntate: **¿hay una parte mecánica, repetida y
 
 ### El subagente: `mecanico`
 
-El subagente se llama **`mecanico`** y usa el modelo `thinkingmachines/inkling-2-small:free` (vía OpenRouter). Su definición está en `mecanico.md` (se instala en el directorio de agentes de tu herramienta). Invócalo para toda tarea que cumpla los criterios de abajo.
+El subagente se llama **`mecanico`** y usa el modelo `qwen/qwen3.7-flash`. Su definición está en `mecanico.md` (se instala en el directorio de agentes de tu herramienta). Invócalo para toda tarea que cumpla los criterios de abajo.
 
 **Restricciones de privacidad (innegociables):** el endpoint gratuito registra los prompts y salidas y los usa para mejorar los modelos del proveedor. Por eso:
 - **Nunca** incluyas en un encargo ni dejes accesible al subagente: `data/`, `.env*`, `config.json` reales, claves (`api_key`, `hf_token`), audios, ni ningún `transcript.json`, acta o informe real. Todo eso contiene datos personales o secretos.
