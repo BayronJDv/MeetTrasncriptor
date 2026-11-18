@@ -69,50 +69,7 @@ Parseo robusto de JSON del LLM (extraer de cercas, tolerar comas finales, 1 rein
 
 ## Fase 2 — Motores ASR/diarización intercambiables e instalación guiada
 
-### Paso 2.1 — Puertos y tipos neutrales
-
-- Crear `app/services/audio/ports.py`: `AudioBuffer(samples, sample_rate, duration)`, `Word`, `Segment`, `Turn`, `AsrResult`, `EngineInfo`, `ProgressFn(stage, fraction, detail)` y `CancelFn()`.
-- Crear `app/services/audio/chunking.py` moviendo `snap_boundary`/`compute_chunks` (`whisperx_service.py:42-62`) y la decodificación a 16 kHz (`whisperx_service.py:83-85`, `ffmpeg_utils.py`). La concatenación de audio deja de depender de `whisperx.load_audio`.
-
-### Paso 2.2 — Orquestador fuera de los adaptadores
-
-- Crear `app/services/transcription.py` con el flujo actual (`whisperx_service.py:65-214`) reescrito contra los puertos: resolución de motores → carga → transcripción por chunk → alineación opcional → diarización → asignación de hablantes → escritura de `transcript.json` → `meta.json`.
-- Escala de progreso y etapas idénticas a las actuales (5-60 ASR, 62-94 diarización, 95 asignación, 98 guardado) para no tocar SSE (`web/src/components.jsx:5-30`, `app/jobs.py:154-203`).
-- Pasar `check_cancel()` a cada llamada larga (hoy solo 3 puntos: `whisperx_service.py:95,150,155`); ampliar a carga de modelo, decodificación, alineación y guardado.
-- Metadatos nuevos `engine`/`model` en `transcript.json`, **añadiendo** claves y conservando `whisper_model` y `diarized` (`whisperx_service.py:202-207`).
-
-### Paso 2.3 — Adaptadores
-
-- `engines/asr/whisperx.py`: migrar `whisperx_service.py:18-214` sin cambios de comportamiento, incluidos los fallbacks de alineación (110-133) y asignación (164-170). `import whisperx` lazy dentro de `load()`.
-- `engines/diar/pyannote.py`: migrar `diarization.py:33-66`; devolver `list[Turn]` en vez de DataFrame; conservar el fallback GPU→CPU por OOM (15-17, 60-66) y el callback de progreso.
-- `engines/speaker_assignment.py`: portar `assign_word_speakers` (`whisperx_service.py:161-170`) a una función neutral con degradación segura.
-- `engines/asr/parakeet_gguf.py`: `subprocess` a `nemo-speech transcribe ... --json` (allow-list, sin `shell=True`); parsear palabras/timestamps a `AsrResult`; detectar el binario con `shutil.which`. Reutilizar `chunking.py` para audios largos.
-- `engines/diar/nemotron_gguf.py`: `nemo-speech diarize ... --json` → `list[Turn]`. Variante GPU `nemotron_hf.py` con `AutoProcessor`/`AutoModelForAudioFrameClassification` y `extract_speaker_dict` según la model card, detrás de un extra opcional.
-- `engines/diar/none.py`: no-op para quien no tenga token HF.
-- Diferir (no implementar en esta fase): faster-whisper, Qwen3-ASR y FunASR. Cada uno podría añadirse después como un único archivo.
-
-### Paso 2.4 — Catálogo, recomendador e instalación
-
-- `app/services/catalog.py` + `app/routers/catalog.py`: `GET /api/catalog` con `{id, kind, label, license, requirements[], hardware_tier, installed, install_hint}`. Requirements tipados: `hf_token`, `hf_terms(url)`, `ram_gb`, `vram_gb`, `pip_extra`, `binary`.
-- `app/routers/settings.py:79-121` (`/system`): ampliar con `cpu`, `ram_gb`, `vram_gb`, `os`, capacidades detectadas y `recommendations` con 3 perfiles:
-  - CPU / ≤2 GB: Parakeet GGUF + Nemotron GGUF; alternativa WhisperX `small` int8 si necesita 99 idiomas.
-  - GPU NVIDIA ≥6 GB: Parakeet v3 (Transformers/NeMo) + Nemotron-3.
-  - Cualquiera: pyannote community-1 requiere token HF y aceptar términos; mostrar la URL del modelo y un checkbox "Acepto los términos" antes de marcarlo instalado.
-- Instalación: `POST /api/engines/{id}/install` como job (mismo `manager.submit` de `app/jobs.py:80-92`), ejecutando solo comandos declarados en el catálogo (por ejemplo `pip install -e ".[asr-parakeet]"` o el script oficial de `nemo-speech`); también `run.py --install <id>` para CLI. Sin ejecución arbitraria.
-- `requirements.txt` queda reducido al núcleo; cada motor se declara como extra en `pyproject.toml`.
-
-### Paso 2.5 — Configuración e interfaz
-
-- `config.py`/`schemas.py`: `asr.engine`, `diar.engine`, `asr.options` y `diar.options` (diccionarios libres validados por el adaptador). La migración v2→v3 mueve `asr.model/device/compute_type/batch_size/chunk_minutes` a `asr.options.whisperx` y `hf_token/min_speakers/...` a `diar.options.pyannote`.
-- `app/routers/transcribe.py:11,26`: dejar de importar la implementación concreta y llamar a `transcription.run(...)`.
-- `Settings.jsx:82-146`: dos selectores de motor desde `/api/catalog`, checklist de requisitos con enlaces, estado `instalado / no instalado`, botón "Instalar" y banner con la recomendación del hardware. Nuevo componente `web/src/components/settings/EnginePanel.jsx`.
-- `Process.jsx:97-110`: mostrar los nombres de motor/modelo reales en "Configuración activa".
-
-### Paso 2.6 — Verificación
-
-- Tests con adaptadores falsos: el `transcript.json` resultante conserva claves y tipos; progreso dentro de 0-100; cancelación en todas las etapas; fallback sin diarización; recomendaciones por perfil; `status` sin importar librerías pesadas.
-- **Aceptación**: con la app recién clonada no se descarga ningún modelo; elegir un motor muestra sus requisitos; tras instalarlo la transcripción funciona sin tocar código; cambiar de motor no altera las demás etapas.
-
+revisar [Plan fase 2](./Fase2.md)
 ---
 
 ## Fase 3 — Endurecimiento production

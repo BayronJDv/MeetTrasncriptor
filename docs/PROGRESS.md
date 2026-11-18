@@ -18,3 +18,6 @@
 - Configurado marcador `integration`; contrato revisa transcripciones presentes sin parametrización vacía ni skips; pendiente de ejecución por el usuario. Sintaxis comprobada con `python3 -m py_compile tests/conftest.py tests/test_transcript_contract.py`.
 - P2-1: tipos neutrales de audio, decodificación FFmpeg a PCM float32 mono y chunking separados de WhisperX; servicio conserva el flujo actual.
 - Añadidos tests sintéticos para `snap_boundary` y `compute_chunks` en `tests/test_audio_chunking.py`; pendientes de ejecución por el usuario.
+- P2-2: añadidos interfaz de motor y adaptadores WhisperX, pyannote, none y asignación neutral de hablantes; imports pesadas en `load()`.
+- Añadidos tests falsos de OOM GPU→CPU, degradación de asignación e imports lazy en `tests/test_engine_adapters.py`; pendientes de ejecución por el usuario.
+- Sintaxis validada con `python3 -m py_compile`; orquestador y router sin cambios. Riesgo: sin integración hasta P2-3.
