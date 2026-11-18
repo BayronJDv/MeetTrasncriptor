@@ -59,11 +59,71 @@ def _ram_gb() -> float | None:
 
 def _mask_secrets(cfg: dict) -> dict:
     cfg = dict(cfg)
-    cfg["llm"] = dict(cfg["llm"])
-    cfg["diar"] = dict(cfg["diar"])
+    cfg["llm"] = dict(cfg.get("llm", {}))
+    cfg["diar"] = dict(cfg.get("diar", {}))
     cfg["llm"]["api_key"] = "********"
     cfg["diar"]["hf_token"] = "********"
+    diar_options = dict(cfg["diar"].get("options", {}))
+    pyannote = dict(diar_options.get("pyannote", {}))
+    pyannote["hf_token"] = "********"
+    diar_options["pyannote"] = pyannote
+    cfg["diar"]["options"] = diar_options
     return cfg
+
+
+def _sync_engine_options(payload: dict, previous: dict, section: str, option_name: str, keys: tuple[str, ...]) -> None:
+    values = payload.get(section)
+    if values is None:
+        return
+    previous_section = previous.get(section, {})
+    engine = values.get("engine", previous_section.get("engine", option_name))
+    all_options = dict(previous_section.get("options", {}))
+    all_options.update(values.get("options", {}))
+    options = dict(all_options.get(engine, {}))
+    if engine == option_name:
+        for key in keys:
+            if key in values:
+                options[key] = values[key]
+            elif key in options:
+                values[key] = options[key]
+            elif key in previous_section:
+                options[key] = previous_section[key]
+                values[key] = options[key]
+    all_options[engine] = options
+    values["options"] = all_options
+
+
+def _preserve_diar_token(payload: dict, previous: dict) -> None:
+    values = payload.get("diar", {})
+    old_values = previous.get("diar", {})
+    if values.get("hf_token") == "********":
+        values["hf_token"] = old_values.get("hf_token", "")
+    options = values.get("options", {})
+    pyannote = options.get("pyannote", {})
+    if pyannote.get("hf_token") == "********":
+        options = dict(options)
+        pyannote = dict(pyannote)
+        old_token = old_values.get("options", {}).get("pyannote", {}).get("hf_token")
+        pyannote["hf_token"] = old_token if old_token is not None else old_values.get("hf_token", "")
+        options["pyannote"] = pyannote
+        values["options"] = options
+    if "hf_token" in values:
+        options = dict(values.get("options", {}))
+        pyannote = dict(options.get("pyannote", {}))
+        pyannote["hf_token"] = values["hf_token"]
+        options["pyannote"] = pyannote
+        values["options"] = options
+
+
+def _sync_legacy_diar_token(payload: dict) -> None:
+    values = payload.get("diar", {})
+    if "hf_token" not in values:
+        return
+    options = dict(values.get("options", {}))
+    pyannote = dict(options.get("pyannote", {}))
+    pyannote["hf_token"] = values["hf_token"]
+    options["pyannote"] = pyannote
+    values["options"] = options
 
 
 @router.get("/settings")
@@ -79,10 +139,14 @@ def put_settings(patch: SettingsPatch) -> dict:
         part = getattr(patch, section)
         if part is not None:
             payload[section] = part.model_dump(exclude_unset=True)
+    _sync_engine_options(payload, previous, "asr", "whisperx", ("model", "device", "compute_type", "batch_size", "chunk_minutes"))
+    _sync_engine_options(payload, previous, "diar", "pyannote", ("device", "hf_token", "min_speakers", "max_speakers", "clips_per_speaker"))
     for section, key in (("llm", "api_key"), ("diar", "hf_token")):
         values = payload.get(section, {})
         if values.get(key) == "********":
             values[key] = previous[section].get(key, "")
+    _preserve_diar_token(payload, previous)
+    _sync_legacy_diar_token(payload)
     cfg = save_config(payload)
     return {"config": _mask_secrets(cfg)}
 

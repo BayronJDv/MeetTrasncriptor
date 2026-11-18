@@ -1,7 +1,7 @@
 """Esquemas Pydantic para la API."""
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 # ---------- ajustes ----------
 
 class AsrSettings(BaseModel):
+    engine: str = "whisperx"
+    options: dict[str, dict[str, Any]] = Field(default_factory=dict)
     model: str = "small"
     language: str = "es"
     device: Literal["cpu", "cuda"] = "cpu"
@@ -18,6 +20,8 @@ class AsrSettings(BaseModel):
 
 
 class DiarSettings(BaseModel):
+    engine: str = "pyannote"
+    options: dict[str, dict[str, Any]] = Field(default_factory=dict)
     device: Literal["auto", "cpu", "cuda"] = "auto"
     hf_token: str = ""
     min_speakers: Optional[int] = Field(default=None, ge=1, le=20)

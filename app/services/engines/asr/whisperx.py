@@ -21,6 +21,18 @@ class WhisperXEngine:
 
     def load(self, config: dict[str, Any], check_cancel: CancelFn | None = None) -> None:
         check_cancel = check_cancel or (lambda: None)
+        if not isinstance(config.get("model"), str) or not config["model"]:
+            raise ValueError("WhisperX requiere un modelo no vacío")
+        if config.get("device") not in {"cpu", "cuda"}:
+            raise ValueError("WhisperX device debe ser cpu o cuda")
+        if config.get("compute_type") not in {"int8", "float16", "float32"}:
+            raise ValueError("WhisperX compute_type no es válido")
+        if not isinstance(config.get("batch_size"), int) or not 1 <= config["batch_size"] <= 64:
+            raise ValueError("WhisperX batch_size debe estar entre 1 y 64")
+        if not isinstance(config.get("chunk_minutes"), int) or not 1 <= config["chunk_minutes"] <= 30:
+            raise ValueError("WhisperX chunk_minutes debe estar entre 1 y 30")
+        if not isinstance(config.get("language"), str):
+            raise ValueError("WhisperX language debe ser texto")
         check_cancel()
         import whisperx
 

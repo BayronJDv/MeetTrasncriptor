@@ -1,27 +1,13 @@
 # Progreso
 
-- P1-1: configuración v2 y migración; `llm.tasks`, prompts `{system,user}`, secretos enmascarados y centinela de PUT. Archivos: `app/config.py`, `app/schemas.py`, `app/routers/settings.py`, tests de configuración.
-- P1-2: registro de prompts, defaults, variables requeridas, render por reemplazo y validación. Archivos: `app/services/llm/prompts.py`, `tests/test_prompts.py`.
-- P1-3: cliente LLM, overrides por tarea, descubrimiento y endpoints LLM/prompts; errores de listado devuelven `[]`. Archivos: `app/services/llm/client.py`, `app/routers/llm.py`, `app/main.py`, `tests/test_llm.py`.
-- P1-4: jobs review/meeting/report integrados con prompts configurables y overrides por fase; límites del informe editables.
-- P1-5: extracción JSON robusta y reintento; report conserva contratos `report_work.json`/`informe.md.json`; errores terminales identifican etapa y modelo.
-- Tests de P1-1–P1-5 escritos; pendientes de ejecución por el usuario. Verificación sintáctica previa con `python3 -m py_compile`.
-- Tarea completada: P1-6, controles de modelos por tarea, descubrimiento y prueba de conexión LLM; el fallo de Ollama muestra `ollama pull <modelo>`.
-- Editor de prompts por cinco etapas integrado en ajustes, con validación en vivo y restauración de defaults; envía `prompts` junto al PUT `/settings`.
-- Secretos conservan el centinela `********` al guardar; el frontend no muestra valores API key/HF token.
-- Archivos clave P1-6: `web/src/pages/Settings.jsx`, nuevo `web/src/components/settings/PromptEditor.jsx`.
-- Verificación pendiente: `npm run build` no pudo arrancar porque `web/node_modules/.bin/vite` no está instalado; no se instalaron dependencias. Tests/build pendientes de ejecutar por el usuario.
-- P1-7: inventario por nombres confirma casos de P1-1–P1-5 y seis criterios de test del paso 1.6; añadido caso de persistencia de prompts al recargar config en `tests/test_llm.py`.
-- Revisión de P1-7 no encontró defectos funcionales verificables; pendiente prueba manual Ollama apagado/encendido, modelos por etapa, persistencia tras reinicio y migración v1 conservando `api_key`.
-- P2-0: añadido `pyproject.toml` con dependencias actuales y extras vacíos; `requirements.txt` permanece sin cambios.
-- Añadidos `tests/conftest.py` (audio sintético silencio/tono), `tests/fixtures/transcript_example.json` y `tests/test_transcript_contract.py`; cubre el formato escrito por `whisperx_service` y cualquier `data/projects/*/transcript.json`.
-- Configurado marcador `integration`; contrato revisa transcripciones presentes sin parametrización vacía ni skips; pendiente de ejecución por el usuario. Sintaxis comprobada con `python3 -m py_compile tests/conftest.py tests/test_transcript_contract.py`.
-- P2-1: tipos neutrales de audio, decodificación FFmpeg a PCM float32 mono y chunking separados de WhisperX; servicio conserva el flujo actual.
-- Añadidos tests sintéticos para `snap_boundary` y `compute_chunks` en `tests/test_audio_chunking.py`; pendientes de ejecución por el usuario.
-- P2-2: añadidos interfaz de motor y adaptadores WhisperX, pyannote, none y asignación neutral de hablantes; imports pesadas en `load()`.
-- Añadidos tests falsos de OOM GPU→CPU, degradación de asignación e imports lazy en `tests/test_engine_adapters.py`; pendientes de ejecución por el usuario.
-- P2-3: añadido `app/services/transcription.py`; wrapper mantiene el callable importado por router sin cambiarlo. Resuelve siempre WhisperX + pyannote; incluye ASR por chunks, alineación en adaptador, diarización, asignación y persistencia.
-- Progreso conserva etapas 5-60, 62-94, 95 y 98 con monotonicidad; cancelación antes/después de cargas, decode, chunks, alineación, diarización, asignación y guardados.
-- `transcript.model` añade `engine` y `model`, mantiene `whisper_model`, `diarized` y restantes claves/tipos; contrato acepta transcripciones antiguas.
-- Tests falsos añadidos para contrato, progreso, cancelación, alineación y resultado sin/con diarización; pendientes de ejecución por el usuario.
-- Verificación estática P2-3: `python3 -m py_compile` en archivos tocados y `git diff --check`; no se ejecutaron tests.
+- P1-1–P1-5: config v2, prompts/clientes LLM, jobs review/meeting/report, extracción JSON y contratos preservados; tests escritos, pendientes de ejecución.
+- P1-6–P1-7: ajustes de modelos/prompts, secretos con centinela y prueba Ollama; revisión pendiente de prueba manual y persistencia tras reinicio.
+- Pendiente previo: `npm run build` requiere instalar dependencias web; no se instalaron.
+- P2-0: pyproject y contrato de transcript con fixtures sintéticos; tests pendientes del usuario.
+- P2-1: puertos audio y chunking; tests sintéticos pendientes.
+- P2-2: interfaces y adaptadores WhisperX/pyannote/none; imports pesados dentro de `load()`; tests falsos pendientes.
+- P2-3: orquestador `app/services/transcription.py`; progreso/cancelación preservados y contrato `transcript.json` ampliado solo con claves nuevas.
+- P2-4: config/schema v3 con engine/options, migración v1/v2 y mirrors legacy para la UI actual; `hf_token` se conserva y enmascara en `options.pyannote`.
+- Registro perezoso de adaptadores; el router llama al orquestador y `diar.engine=none` omite diarización.
+- Tests de migración, defaults, secretos, validación de options y transcript sin hablantes escritos; pendientes de ejecución por el usuario.
+- Verificación estática: `python3 -m py_compile` y `git diff --check`; pytest no ejecutado.

@@ -19,6 +19,15 @@ class PyannoteEngine:
 
     def load(self, config: dict[str, Any], check_cancel: CancelFn | None = None) -> None:
         check_cancel = check_cancel or (lambda: None)
+        if config.get("device", "auto") not in {"auto", "cpu", "cuda"}:
+            raise ValueError("pyannote device debe ser auto, cpu o cuda")
+        for key in ("min_speakers", "max_speakers"):
+            value = config.get(key)
+            if value is not None and (not isinstance(value, int) or not 1 <= value <= 20):
+                raise ValueError(f"pyannote {key} debe estar entre 1 y 20")
+        clips = config.get("clips_per_speaker", 4)
+        if not isinstance(clips, int) or not 1 <= clips <= 10:
+            raise ValueError("pyannote clips_per_speaker debe estar entre 1 y 10")
         check_cancel()
         import torch
         from whisperx.diarize import DiarizationPipeline

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -12,16 +13,50 @@ from .engines.base import ASREngine, DiarizationEngine
 from .engines.speaker_assignment import assign_word_speakers
 
 
-def resolve_engines(cfg: dict[str, Any], log: Callable[[str], None]) -> tuple[ASREngine, DiarizationEngine]:
-    from .engines.asr.whisperx import WhisperXEngine
-    from .engines.diar.pyannote import PyannoteEngine
+ENGINE_REGISTRY = {
+    "asr": {
+        "whisperx": (".engines.asr.whisperx", "WhisperXEngine"),
+    },
+    "diar": {
+        "pyannote": (".engines.diar.pyannote", "PyannoteEngine"),
+        "none": (".engines.diar.none", "NoDiarizationEngine"),
+    },
+}
 
-    return WhisperXEngine(log=log), PyannoteEngine()
+
+def _engine_class(kind: str, engine_id: str) -> type:
+    try:
+        module_name, class_name = ENGINE_REGISTRY[kind][engine_id]
+    except KeyError as exc:
+        raise ValueError(f"Motor {kind} desconocido: {engine_id}") from exc
+    module = importlib.import_module(module_name, __package__)
+    return getattr(module, class_name)
+
+
+def _engine_config(section: dict[str, Any], engine_id: str, legacy_keys: tuple[str, ...]) -> dict[str, Any]:
+    options = dict(section.get("options", {}).get(engine_id, {}))
+    for key in legacy_keys:
+        if key not in options and key in section:
+            options[key] = section[key]
+    if "language" in section:
+        options["language"] = section["language"]
+    return options
+
+
+def resolve_engines(cfg: dict[str, Any], log: Callable[[str], None]) -> tuple[ASREngine, DiarizationEngine]:
+    asr_id = cfg["asr"].get("engine", "whisperx")
+    diar_id = cfg["diar"].get("engine", "pyannote")
+    asr_engine = _engine_class("asr", asr_id)(log=log)
+    diar_engine = _engine_class("diar", diar_id)()
+    return asr_engine, diar_engine
 
 
 def run(project_id: str, audio_path: Path, job: Job) -> None:
     cfg = config.load_config()
-    cfg_asr, cfg_diar = cfg["asr"], cfg["diar"]
+    asr_id = cfg["asr"].get("engine", "whisperx")
+    diar_id = cfg["diar"].get("engine", "pyannote")
+    cfg_asr = _engine_config(cfg["asr"], asr_id, ("model", "device", "compute_type", "batch_size", "chunk_minutes"))
+    cfg_diar = _engine_config(cfg["diar"], diar_id, ("device", "hf_token", "min_speakers", "max_speakers", "clips_per_speaker"))
     started_at = time.time()
     asr_engine, diar_engine = resolve_engines(cfg, lambda line: job.log_line(manager, line))
     check_cancel = job.check_cancel
@@ -34,12 +69,13 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
         manager.update(job, stage=stage, progress=progress, detail=detail)
 
     check_cancel()
+    model_name = cfg_asr.get("model", asr_id)
     manager.update(
         job,
         stage="Cargando modelo",
-        detail=f"{cfg_asr['model']} ({cfg_asr['device']}, {cfg_asr['compute_type']})",
+        detail=f"{model_name} ({cfg_asr.get('device', 'auto')}, {cfg_asr.get('compute_type', 'default')})",
     )
-    job.log_line(manager, f"Cargando modelo Whisper '{cfg_asr['model']}' en {cfg_asr['device']}…")
+    job.log_line(manager, f"Cargando modelo {asr_engine.info().name} '{model_name}'…")
     asr_engine.load(cfg_asr, check_cancel=check_cancel)
     check_cancel()
 
@@ -51,10 +87,11 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
     duration = audio_buffer.duration
     job.log_line(manager, f"Audio: {duration / 60:.1f} min")
 
-    chunks = compute_chunks(audio, cfg_asr["chunk_minutes"])
-    job.log_line(manager, f"{len(chunks)} tramos de ~{cfg_asr['chunk_minutes']} min")
+    chunk_minutes = cfg_asr.get("chunk_minutes", 5)
+    chunks = compute_chunks(audio, chunk_minutes)
+    job.log_line(manager, f"{len(chunks)} tramos de ~{chunk_minutes} min")
     segments: list[Segment] = []
-    language = cfg_asr["language"] or "es"
+    language = cfg_asr.get("language") or "es"
 
     for i, (start, end) in enumerate(chunks):
         check_cancel()
@@ -80,10 +117,13 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
 
     speakers_found: list[str] = []
     turns: list[Turn] = []
-    if cfg_diar.get("hf_token"):
+    diar_token = cfg_diar.get("hf_token")
+    if diar_id == "none":
+        job.log_line(manager, "Motor de diarización desactivado")
+    elif diar_token:
         check_cancel()
         update_progress("Diarizando", 62, "Identificando voces…")
-        job.log_line(manager, "Ejecutando diarización pyannote…")
+        job.log_line(manager, f"Ejecutando diarización {diar_engine.info().name}…")
         diar_engine.load(cfg_diar, check_cancel=check_cancel)
         check_cancel()
 
@@ -137,11 +177,11 @@ def run(project_id: str, audio_path: Path, job: Job) -> None:
         "duration": round(duration, 2),
         "model": {
             "engine": asr_engine.info().id,
-            "model": cfg_asr["model"],
-            "whisper_model": cfg_asr["model"],
-            "device": cfg_asr["device"],
-            "compute_type": cfg_asr["compute_type"],
-            "diarized": bool(cfg_diar.get("hf_token")),
+            "model": model_name,
+            "whisper_model": model_name,
+            "device": cfg_asr.get("device", "auto"),
+            "compute_type": cfg_asr.get("compute_type", "default"),
+            "diarized": bool(diar_token) and diar_id != "none",
         },
         "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "speakers": [{"id": speaker, "name": None, "clips": []} for speaker in speakers_found],

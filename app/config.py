@@ -16,8 +16,18 @@ TEMPLATES_DIR = BASE_DIR / "templates"
 BIN_DIR = DATA_DIR / "bin"
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "schema_version": 2,
+    "schema_version": 3,
     "asr": {
+        "engine": "whisperx",
+        "options": {
+            "whisperx": {
+                "model": "small",
+                "device": "cpu",
+                "compute_type": "int8",
+                "batch_size": 8,
+                "chunk_minutes": 5,
+            }
+        },
         "model": "small",
         "language": "es",
         "device": "cpu",
@@ -26,6 +36,16 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "chunk_minutes": 5,
     },
     "diar": {
+        "engine": "pyannote",
+        "options": {
+            "pyannote": {
+                "device": "auto",
+                "hf_token": "",
+                "min_speakers": None,
+                "max_speakers": None,
+                "clips_per_speaker": 4,
+            }
+        },
         "device": "auto",
         "hf_token": "",
         "min_speakers": None,
@@ -103,6 +123,26 @@ def _migrate_v1(cfg: dict) -> dict:
     return migrated
 
 
+def _migrate_v2(cfg: dict) -> dict:
+    if cfg.get("schema_version", 1) >= 3:
+        return cfg
+    migrated = _deep_merge(DEFAULT_CONFIG, cfg)
+    asr = migrated["asr"]
+    diar = migrated["diar"]
+    asr_options = dict(asr.get("options", {}).get("whisperx", {}))
+    for key in ("model", "device", "compute_type", "batch_size", "chunk_minutes"):
+        asr_options[key] = asr.get(key, asr_options.get(key))
+    asr["engine"] = asr.get("engine") or "whisperx"
+    asr.setdefault("options", {})["whisperx"] = asr_options
+    diar_options = dict(diar.get("options", {}).get("pyannote", {}))
+    for key in ("device", "hf_token", "min_speakers", "max_speakers", "clips_per_speaker"):
+        diar_options[key] = diar.get(key, diar_options.get(key))
+    diar["engine"] = diar.get("engine") or "pyannote"
+    diar.setdefault("options", {})["pyannote"] = diar_options
+    migrated["schema_version"] = 3
+    return migrated
+
+
 def load_config() -> dict:
     ensure_dirs()
     with _lock:
@@ -122,7 +162,7 @@ def load_config() -> dict:
                 stored = {}
             merged = _deep_merge(DEFAULT_CONFIG, stored)
             merged["schema_version"] = stored.get("schema_version", 1)
-            return _migrate_v1(merged)
+            return _migrate_v2(_migrate_v1(merged))
         return copy.deepcopy(DEFAULT_CONFIG)
 
 
@@ -136,6 +176,7 @@ def save_config(patch: dict) -> dict:
             except (json.JSONDecodeError, OSError):
                 current = {}
         merged = _deep_merge(_deep_merge(DEFAULT_CONFIG, current), patch)
+        merged["schema_version"] = 3
         CONFIG_PATH.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
     return merged
 

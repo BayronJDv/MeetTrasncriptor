@@ -2,6 +2,8 @@ import importlib
 import sys
 from types import ModuleType, SimpleNamespace
 
+import pytest
+
 from app.services.audio.ports import Turn, Word
 from app.services.engines.speaker_assignment import assign_word_speakers
 
@@ -50,6 +52,20 @@ def test_pyannote_retries_on_cpu_after_gpu_oom(monkeypatch, tmp_path):
     assert turns == [Turn(start=0.0, end=1.0, speaker="SPEAKER_00")]
     assert any("reintentando en CPU" in detail for _, _, detail in progress)
     assert any(fraction == 0.6 for _, fraction, _ in progress)
+
+
+@pytest.mark.parametrize(
+    "config, message",
+    [
+        ({"model": "", "device": "cpu", "compute_type": "int8", "batch_size": 8, "chunk_minutes": 5, "language": "es"}, "modelo"),
+        ({"model": "small", "device": "auto", "compute_type": "int8", "batch_size": 8, "chunk_minutes": 5, "language": "es"}, "device"),
+    ],
+)
+def test_whisperx_rejects_invalid_options_before_importing_engine(config, message):
+    from app.services.engines.asr.whisperx import WhisperXEngine
+
+    with pytest.raises(ValueError, match=message):
+        WhisperXEngine().load(config)
 
 
 def test_assign_word_speakers_returns_original_words_when_assignment_fails():

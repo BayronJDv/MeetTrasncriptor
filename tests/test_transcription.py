@@ -64,6 +64,34 @@ class FakeDiar:
         return EngineInfo("pyannote", "pyannote", "fake")
 
 
+def test_resolve_engines_instantiates_configured_registry_entries(monkeypatch):
+    class RegisteredASR:
+        def __init__(self, log=None):
+            self.log = log
+
+    class RegisteredDiar:
+        pass
+
+    modules = {
+        ".engines.asr.whisperx": type("Module", (), {"WhisperXEngine": RegisteredASR}),
+        ".engines.diar.none": type("Module", (), {"NoDiarizationEngine": RegisteredDiar}),
+    }
+    imported = []
+
+    def fake_import(module_name, package):
+        imported.append(module_name)
+        return modules[module_name]
+
+    monkeypatch.setattr(transcription.importlib, "import_module", fake_import)
+    asr, diar = transcription.resolve_engines(
+        {"asr": {"engine": "whisperx"}, "diar": {"engine": "none"}}, lambda _: None
+    )
+
+    assert isinstance(asr, RegisteredASR)
+    assert isinstance(diar, RegisteredDiar)
+    assert imported == [".engines.asr.whisperx", ".engines.diar.none"]
+
+
 def _install_fakes(monkeypatch, tmp_path, job, cancel_stage=None, diarized=False):
     cfg = {"asr": dict(CFG["asr"]), "diar": {"hf_token": "token" if diarized else ""}}
     monkeypatch.setattr(transcription.config, "load_config", lambda: cfg)
@@ -146,6 +174,43 @@ def test_transcription_cancellation_stops_after_each_long_stage(monkeypatch, tmp
 
     with pytest.raises(JobCancelled):
         transcription.run("project", tmp_path / "audio.wav", job)
+
+
+def test_transcription_with_none_diarization_writes_valid_transcript_without_speakers(monkeypatch, tmp_path):
+    job = Job("job", "project", "transcribe")
+    _install_fakes(monkeypatch, tmp_path, job)
+    cfg = {
+        "asr": dict(CFG["asr"], engine="whisperx", options={"whisperx": {}}),
+        "diar": {"engine": "none", "options": {"none": {}}},
+    }
+    monkeypatch.setattr(transcription.config, "load_config", lambda: cfg)
+
+    class NoDiar:
+        loaded = False
+
+        def load(self, config, check_cancel=None):
+            self.loaded = True
+
+        def diarize(self, audio_path, progress_cb, check_cancel=None):
+            raise AssertionError("none no debe ejecutar diarización")
+
+        def info(self):
+            return EngineInfo("none", "Sin diarización", "fake")
+
+    no_diar = NoDiar()
+    monkeypatch.setattr(transcription, "resolve_engines", lambda config, log: (FakeASR(), no_diar))
+    saved = {}
+    monkeypatch.setattr(transcription.config, "save_json", lambda project_id, name, data: saved.setdefault(name, data))
+    monkeypatch.setattr(transcription.config, "save_meta", lambda project_id, patch: None)
+
+    transcription.run("project", tmp_path / "audio.wav", job)
+
+    transcript = saved["transcript.json"]
+    validate_transcript(transcript)
+    assert no_diar.loaded is False
+    assert transcript["speakers"] == []
+    assert all(segment["speaker"] is None for segment in transcript["segments"])
+    assert transcript["model"]["diarized"] is False
 
 
 def test_transcription_assigns_speakers_when_diarization_returns_turns(monkeypatch, tmp_path):

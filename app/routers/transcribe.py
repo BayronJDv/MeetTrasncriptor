@@ -8,7 +8,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from .. import config
 from ..jobs import manager
-from ..services.whisperx_service import transcribe_and_diarize
+from ..services import transcription
 
 router = APIRouter(prefix="/api", tags=["transcribe"])
 
@@ -23,7 +23,7 @@ def start_transcription(project_id: str) -> dict:
         raise HTTPException(400, "El archivo de audio no existe")
 
     def run(job) -> None:
-        transcribe_and_diarize(project_id, audio_path, job)
+        transcription.run(project_id, audio_path, job)
 
     job = manager.submit("transcribe", project_id, run)
     return job.snapshot()
