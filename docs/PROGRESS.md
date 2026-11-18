@@ -8,4 +8,8 @@
 - Tarea completada: P1-2, registro seguro de prompts con defaults literales, variables requeridas, render por reemplazo y validación de longitud.
 - Archivos clave: `app/services/llm/prompts.py`, `tests/test_prompts.py`; los jobs siguen sin integrar el registro (P1-4).
 - Verificación sintáctica: `python3 -m py_compile app/services/llm/prompts.py tests/test_prompts.py`; tests escritos, pendientes de ejecutar por el usuario.
-- Pendiente: P1-3 cliente LLM/Ollama y P1-4 conexión de jobs.
+- Tarea completada: P1-3, cliente LLM con overrides por tarea, descubrimiento de modelos Ollama/OpenAI-compatible y endpoints LLM/prompts.
+- Archivos clave: `app/services/llm/client.py`, nuevo `app/routers/llm.py`, registro en `app/main.py`, `tests/test_llm.py`.
+- `PROVIDERS.get` evita KeyError por provider desconocido; `list_models` registra errores sin propagar excepción y devuelve `[]`.
+- Tests escritos para overrides, parseo `/api/tags`, provider desconocido, reset de prompt y Ollama no disponible; pendientes de ejecutar por el usuario.
+- Pendiente: P1-4 conexión de jobs y uso de prompts registrados.

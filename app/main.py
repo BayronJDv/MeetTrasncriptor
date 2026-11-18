@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config
 from .jobs import manager
-from .routers import meeting, projects, report, review, settings, speakers, transcribe
+from .routers import llm, meeting, projects, report, review, settings, speakers, transcribe
 
 BASE_DIR = config.BASE_DIR
 WEB_DIST = BASE_DIR / "web" / "dist"
@@ -33,6 +33,7 @@ for r in (
     meeting.router,
     report.router,
     settings.router,
+    llm.router,
 ):
     app.include_router(r)
 
