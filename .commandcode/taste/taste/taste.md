@@ -11,3 +11,6 @@
 - When a task requires changes beyond the initially described scope, document the decision and resulting changes in both the progress log and suggested commit message. Confidence: 0.9
 - For repository tasks, wants a concise final report covering changes, files touched, exact test commands for the user, and risks; also wants a brief progress-log update and a suggested commit in `[ID] summary` format. Confidence: 0.9
 - Prefers delegating mechanical, repetitive repository work to subagents and using token-efficient workflows such as bounded file reads and concise outputs. Confidence: 0.85
+- Prefers using `uv` to create Python virtual environments with the required Python version. Confidence: 0.9
+- When managing Python packages with uv, use the `uv pip ...` command rather than invoking `python -m pip`. Confidence: 0.9
+- Prefers `pnpm` over `npm` for all web dependency-management and installation commands. Confidence: 0.95

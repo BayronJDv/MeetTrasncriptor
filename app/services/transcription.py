@@ -16,6 +16,7 @@ from .engines.speaker_assignment import assign_word_speakers
 ENGINE_REGISTRY = {
     "asr": {
         "whisperx": (".engines.asr.whisperx", "WhisperXEngine"),
+        "parakeet_gguf": (".engines.asr.parakeet_gguf", "ParakeetGGUFEngine"),
     },
     "diar": {
         "pyannote": (".engines.diar.pyannote", "PyannoteEngine"),
